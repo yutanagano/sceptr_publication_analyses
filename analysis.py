@@ -1,4 +1,5 @@
 from datetime import datetime
+from few_shot_predictor import FewShotPredictor
 import logging
 import numpy as np
 from numpy import ndarray
@@ -11,6 +12,7 @@ import random
 from sklearn import metrics
 from tqdm import tqdm
 from typing import Dict, Iterable, List
+import utils
 
 
 current_time = datetime.now().isoformat()
@@ -26,12 +28,9 @@ BACKGROUND_SAMPLE = BACKGROUND_DATA.sample(n=1000,random_state=420)
 
 EPITOPES = LABELLED_DATA.Epitope.unique()
 
-UPPER_QUANTILE_LEVEL = 0.75
-LOWER_QUANTILE_LEVEL = 0.25
-
 MODELS = (
     tcr_metric.Cdr3Levenshtein(),
-    tcr_metric.Tcrdist()
+    # tcr_metric.Tcrdist()
 )
 
 
@@ -43,11 +42,7 @@ def main() -> None:
     }
 
     for model_name, results in results_per_model.items():
-        model_dir = BENCHMARKS_DIR/model_name
-        model_dir.mkdir(exist_ok=True)
-        
-        for benchmark_type, results_table in results.items():
-            results_table.to_csv(model_dir/f"{benchmark_type}.csv", index=False)
+        save_results(model_name, results)
 
 
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
@@ -69,7 +64,7 @@ def get_one_shot_results(model: TcrMetric) -> Dict[str, DataFrame]:
         aucs = []
         for cdist_idx, tcr_idx in enumerate(epitope_references.index):
             dists = cdist_matrix[:,cdist_idx]
-            similarities = convert_dists_to_scores(dists)
+            similarities = utils.convert_dists_to_scores(dists)
 
             similarities = np.delete(similarities, tcr_idx)
             ground_truth = np.delete(labelled_data_epitope_mask, tcr_idx)
@@ -88,8 +83,8 @@ def get_auc_summary(epitope: str, aucs: Iterable[float]) -> Dict[str, float]:
         "mean_auc": np.mean(aucs),
         "std_auc": np.std(aucs),
         "median_auc": np.median(aucs),
-        f"upper_quantile_{UPPER_QUANTILE_LEVEL}": np.quantile(aucs, q=UPPER_QUANTILE_LEVEL),
-        f"lower_quantile_{LOWER_QUANTILE_LEVEL}": np.quantile(aucs, q=LOWER_QUANTILE_LEVEL),
+        f"upper_quartile": np.quantile(aucs, q=0.75),
+        f"lower_quartile": np.quantile(aucs, q=0.25),
     }
 
 
@@ -106,6 +101,8 @@ def get_few_shot_results(model: TcrMetric) -> Dict[str, DataFrame]:
 def get_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFrame]:
     nn_results = []
     avg_dist_results = []
+    svc_results = []
+    mlp_results = []
     
     for epitope in tqdm(EPITOPES):
         labelled_data_epitope_mask = LABELLED_DATA.Epitope == epitope
@@ -120,16 +117,22 @@ def get_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFrame]:
         ref_index_sets = [
             random.sample(ref_index_sets, k=k) for _ in range(100)
         ]
-        logging.info(f"The first five {k}-shot reference sets for {epitope} for {model.name} have indices: {ref_index_sets[:5]}")
+        logging.info(f"The first five indices in the first {k}-shot reference set for {epitope} for {model.name} are: {ref_index_sets[0][:5]}")
 
         auc_summaries = get_k_shot_auc_summaries_for_epitope(model, epitope, ref_index_sets)
 
         nn_results.append(auc_summaries["nn"])
         avg_dist_results.append(auc_summaries["avg_dist"])
+        # svc_results.append(auc_summaries["svc"])
+
+        if "mlp" in auc_summaries:
+            mlp_results.append(auc_summaries["mlp"])
 
     return {
         f"{k}_shot_nn": DataFrame.from_records(nn_results),
-        f"{k}_shot_avg_dist": DataFrame.from_records(avg_dist_results)
+        f"{k}_shot_avg_dist": DataFrame.from_records(avg_dist_results),
+        # f"{k}_shot_svc": DataFrame.from_records(svc_results),
+        f"{k}_shot_mlp": DataFrame.from_records(mlp_results)
     }
 
 
@@ -158,26 +161,12 @@ def get_k_shot_auc_summaries_for_epitope(model: TcrMetric, epitope: str, ref_ind
     }
 
 
-def convert_dists_to_scores(dists: ndarray) -> ndarray:
-    max_dist = np.max(dists)
-    return 1 - dists / max_dist
-
-
-class FewShotPredictor:
-    def __init__(self, metric: TcrMetric, positive_refs: DataFrame, bg_refs: DataFrame) -> None:
-        self._metric = metric
-        self._positive_refs = positive_refs
-        self._bg_refs = bg_refs
+def save_results(model_name: str, results: Dict[str, DataFrame]) -> None:
+    model_dir = BENCHMARKS_DIR/model_name
+    model_dir.mkdir(exist_ok=True)
     
-    def get_nn_inferences(self, queries: DataFrame) -> ndarray:
-        cdist_matrix = self._metric.calc_cdist_matrix(queries, self._positive_refs)
-        nn_dists = np.min(cdist_matrix, axis=1)
-        return convert_dists_to_scores(nn_dists)
-    
-    def get_avg_dist_inferences(self, queries: DataFrame) -> ndarray:
-        cdist_matrix = self._metric.calc_cdist_matrix(queries, self._positive_refs)
-        avg_dists = np.mean(cdist_matrix, axis=1)
-        return convert_dists_to_scores(avg_dists)
+    for benchmark_type, results_table in results.items():
+        results_table.to_csv(model_dir/f"{benchmark_type}.csv", index=False)
 
 
 if __name__ == "__main__":

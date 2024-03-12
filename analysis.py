@@ -32,7 +32,8 @@ MODELS = (
     variant.ab_sceptr()
 )
 
-NUM_SHOTS = (10,100,200)
+NUM_SHOTS = (10, 100, 200)
+NUM_RANDOM_FOLDS = 100
 
 
 def main() -> None:
@@ -48,8 +49,8 @@ def main() -> None:
 
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
-        **get_one_vs_rest_one_shot_results(model),
-        **get_one_vs_rest_few_shot_results(model),
+        # **get_one_vs_rest_one_shot_results(model),
+        # **get_one_vs_rest_few_shot_results(model),
         **get_one_in_many_results(model)
     }
 
@@ -104,7 +105,7 @@ def get_one_vs_rest_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFr
 
         random.seed("tcrsarecool")
         ref_index_sets = [
-            random.sample(ref_index_sets, k=k) for _ in range(100)
+            random.sample(ref_index_sets, k=k) for _ in range(NUM_RANDOM_FOLDS)
         ]
         logging.info(f"{model.name}:OVR[{k}-shot]:{epitope}: {ref_index_sets[0][:2]}")
 
@@ -158,10 +159,10 @@ def get_one_in_many_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFr
     nn_avg_ranks = defaultdict(list)
     avg_dist_avg_ranks = defaultdict(list)
 
-    labelled_data_with_large_enough_epitope_groups = LABELLED_DATA.groupby("Epitope").filter(lambda group: len(group) - k > 100)
+    labelled_data_with_large_enough_epitope_groups = LABELLED_DATA.groupby("Epitope").filter(lambda group: len(group) - k >= 100)
     labelled_data_grouped_by_epitope = labelled_data_with_large_enough_epitope_groups.groupby("Epitope")
 
-    for random_seed in tqdm(range(100)):
+    for random_seed in tqdm(range(NUM_RANDOM_FOLDS)):
         positive_refs = labelled_data_grouped_by_epitope.sample(n=k, replace=False, random_state=random_seed)
         queries = labelled_data_with_large_enough_epitope_groups[
             ~labelled_data_with_large_enough_epitope_groups.index.isin(positive_refs.index)
@@ -170,6 +171,12 @@ def get_one_in_many_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFr
 
         if random_seed == 0:
             log_sample_indices(positive_refs, k, model)
+
+            positive_refs_summary = positive_refs.groupby("Epitope").size()
+            queries_summary = queries.groupby("Epitope").size()
+
+            logging.info(f"\n{positive_refs_summary}")
+            logging.info(f"\n{queries_summary}")
 
         predictor = FewShotOneInManyPredictor(model, positive_refs, queries)
 
@@ -210,10 +217,14 @@ def generate_summary(epitope: str, measures: Iterable[float], measure_name: str)
 
 
 def get_avg_rank_per_epitope(scores: DataFrame, true_labels: Series) -> Dict[str, float]:
+    scores = scores.reset_index(drop=True)
+    true_labels = true_labels.reset_index(drop=True)
+
     rank_of_true_label = scores.apply(
-        lambda row: row.sort_values(ascending=False).index.get_loc(true_labels.iloc[row.name]),
+        lambda row: row.sort_values(ascending=False).index.get_loc(true_labels.loc[row.name]) + 1,
         axis=1
     )
+
     labels_and_ranks = DataFrame.from_dict({"true_label": true_labels, "rank": rank_of_true_label})
     avg_rank_per_epitope = labels_and_ranks.groupby("true_label").aggregate("mean")["rank"]
     return avg_rank_per_epitope.to_dict()

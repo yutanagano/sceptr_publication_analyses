@@ -1,45 +1,48 @@
 import numpy as np
 from numpy import ndarray
-import pandas as pd
 from pandas import DataFrame
 from pyrepseq.metric.tcr_metric import TcrMetric
 from sklearn.svm import SVC
 import utils
 
 
-def rbf_kernel(cdist: ndarray, characteristic_length: float = 1) -> ndarray:
-    return np.exp(- (cdist / characteristic_length) ** 2)
-
-
-class FewShotPredictor:
-    def __init__(self, metric: TcrMetric, positive_refs: DataFrame, bg_refs: DataFrame) -> None:
-        self._metric = metric
-        self._positive_refs = positive_refs
-        self._bg_refs = bg_refs
-        self._svc = self._train_svc()
-
-    def _train_svc(self) -> SVC:
-        training_data = pd.concat([self._positive_refs, self._bg_refs])
-        ground_truth = [True] * len(self._positive_refs) + [False] * len(self._bg_refs)
-        raw_cdist_matrix = self._metric.calc_cdist_matrix(training_data, training_data)
-        kernel_cdist_matrix = rbf_kernel(raw_cdist_matrix)
-        
-        svc = SVC(kernel="precomputed", probability=True, class_weight="balanced")
-        svc.fit(kernel_cdist_matrix, ground_truth)
-        return svc
+class FewShotOneVsRestPredictor:
+    def __init__(self, metric: TcrMetric, positive_refs: DataFrame, queries: DataFrame) -> None:
+        self._cdist_matrix = metric.calc_cdist_matrix(queries, positive_refs)
     
-    def get_nn_inferences(self, queries: DataFrame) -> ndarray:
-        cdist_matrix = self._metric.calc_cdist_matrix(queries, self._positive_refs)
-        nn_dists = np.min(cdist_matrix, axis=1)
+    def get_nn_inferences(self) -> ndarray:
+        nn_dists = np.min(self._cdist_matrix, axis=1)
         return utils.convert_dists_to_scores(nn_dists)
     
-    def get_avg_dist_inferences(self, queries: DataFrame) -> ndarray:
-        cdist_matrix = self._metric.calc_cdist_matrix(queries, self._positive_refs)
-        avg_dists = np.mean(cdist_matrix, axis=1)
+    def get_avg_dist_inferences(self) -> ndarray:
+        avg_dists = np.mean(self._cdist_matrix, axis=1)
         return utils.convert_dists_to_scores(avg_dists)
 
-    def get_svc_inferences(self, queries: DataFrame) -> ndarray:
-        training_data = pd.concat([self._positive_refs, self._bg_refs])
-        raw_cdist_matrix = self._metric.calc_cdist_matrix(queries, training_data)
-        kernel_cdist_matrix = rbf_kernel(raw_cdist_matrix)
-        return self._svc.predict_proba(kernel_cdist_matrix)[:,1]
+
+class FewShotOneInManyPredictor:
+    def __init__(self, metric: TcrMetric, positive_refs: DataFrame, queries: DataFrame) -> None:
+        self._cdist_matrices = dict()
+
+        grouped_by_epitope = positive_refs.groupby("Epitope")
+        for epitope in grouped_by_epitope.groups:
+            epitope_refs = grouped_by_epitope.get_group(epitope)
+            cdist_matrix = metric.calc_cdist_matrix(queries, epitope_refs)
+            self._cdist_matrices[epitope] = cdist_matrix
+    
+    def get_nn_inferences(self) -> DataFrame:
+        nn_dists = dict()
+        
+        for epitope, cdist_matrix in self._cdist_matrices.items():
+            nn_dists[epitope] = np.min(cdist_matrix, axis=1)
+
+        nn_dists = DataFrame.from_dict(nn_dists)
+        return utils.convert_dists_to_scores(nn_dists)
+    
+    def get_avg_dist_inferences(self) -> DataFrame:
+        avg_dists = dict()
+
+        for epitope, cdist_matrix in self._cdist_matrices.items():
+            avg_dists[epitope] = np.mean(cdist_matrix, axis=1)
+        
+        avg_dists = DataFrame.from_dict(avg_dists)
+        return utils.convert_dists_to_scores(avg_dists)

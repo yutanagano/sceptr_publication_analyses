@@ -27,9 +27,10 @@ LABELLED_DATA = pd.read_csv("tcr_data/preprocessed/benchmarking/vdjdb_cleaned.cs
 EPITOPES = LABELLED_DATA.Epitope.unique()
 
 MODELS = (
-    tcr_metric.Cdr3Levenshtein(),
-    tcr_metric.Tcrdist(),
-    variant.ab_sceptr()
+    # tcr_metric.Cdr3Levenshtein(),
+    # tcr_metric.Tcrdist(),
+    variant.ab_sceptr(),
+    variant.ab_sceptr_large(),
 )
 
 NUM_SHOTS = (10, 100, 200)
@@ -49,8 +50,8 @@ def main() -> None:
 
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
-        # **get_one_vs_rest_one_shot_results(model),
-        # **get_one_vs_rest_few_shot_results(model),
+        **get_one_vs_rest_one_shot_results(model),
+        **get_one_vs_rest_few_shot_results(model),
         **get_one_in_many_results(model)
     }
 

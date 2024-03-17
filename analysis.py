@@ -29,8 +29,9 @@ EPITOPES = LABELLED_DATA.Epitope.unique()
 MODELS = (
     # tcr_metric.Cdr3Levenshtein(),
     # tcr_metric.Tcrdist(),
-    variant.ab_sceptr(),
-    variant.ab_sceptr_large(),
+    # variant.ab_sceptr(),
+    variant.ab_sceptr_blosum(),
+    # variant.ab_sceptr_large(),
 )
 
 NUM_SHOTS = (10, 100, 200)

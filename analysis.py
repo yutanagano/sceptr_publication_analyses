@@ -11,6 +11,7 @@ from pyrepseq.metric.tcr_metric import TcrMetric
 import random
 from sceptr import variant
 from sklearn import metrics
+from tcr_bert import TcrBertForPrecomputedBenchmarking
 from tqdm import tqdm
 from typing import Dict, Iterable, List
 import utils
@@ -30,8 +31,9 @@ MODELS = (
     # tcr_metric.Cdr3Levenshtein(),
     # tcr_metric.Tcrdist(),
     # variant.ab_sceptr(),
-    variant.ab_sceptr_blosum(),
+    # variant.ab_sceptr_blosum(),
     # variant.ab_sceptr_large(),
+    TcrBertForPrecomputedBenchmarking(),
 )
 
 NUM_SHOTS = (10, 100, 200)

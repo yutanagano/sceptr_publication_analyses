@@ -6,12 +6,13 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame, Series
 from pathlib import Path
+from precomputed_representation_model import PrecomputedRepresentationModel
 from pyrepseq.metric import tcr_metric
 from pyrepseq.metric.tcr_metric import TcrMetric
 import random
 from sceptr import variant
 from sklearn import metrics
-from tcr_bert import TcrBertForPrecomputedBenchmarking
+from tcr_bert import TcrBert
 from tqdm import tqdm
 from typing import Dict, Iterable, List
 import utils
@@ -30,10 +31,10 @@ EPITOPES = LABELLED_DATA.Epitope.unique()
 MODELS = (
     # tcr_metric.Cdr3Levenshtein(),
     # tcr_metric.Tcrdist(),
-    # variant.ab_sceptr(),
+    PrecomputedRepresentationModel(variant.ab_sceptr()),
     # variant.ab_sceptr_blosum(),
     # variant.ab_sceptr_large(),
-    TcrBertForPrecomputedBenchmarking(),
+    # PrecomputedRepresentationModel(TcrBert()),
 )
 
 NUM_SHOTS = (10, 100, 200)

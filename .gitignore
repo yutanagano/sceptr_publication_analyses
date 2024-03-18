@@ -1,4 +1,5 @@
 /ignore
 /.venv
+/.bio_transformers
 /__pycache__
 log*.txt

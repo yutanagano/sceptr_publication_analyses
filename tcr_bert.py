@@ -1,14 +1,8 @@
 from numpy import ndarray
-import pandas as pd
 from pandas import DataFrame, Series
-from pathlib import Path
 import torch
 from torch import FloatTensor
 from transformers import BertTokenizer, BertModel
-from typing import Dict
-
-
-PROJECT_ROOT = Path(__file__).parent.resolve()
 
 
 class TcrBert:

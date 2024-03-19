@@ -11,6 +11,7 @@ from pyrepseq.metric import tcr_metric
 from pyrepseq.metric.tcr_metric import TcrMetric
 import random
 from sceptr import variant
+from sceptr_ocaat import SceptrOCAAT
 from sklearn import metrics
 from tcr_bert import TcrBert
 from tqdm import tqdm
@@ -31,10 +32,11 @@ EPITOPES = LABELLED_DATA.Epitope.unique()
 MODELS = (
     # tcr_metric.Cdr3Levenshtein(),
     # tcr_metric.Tcrdist(),
-    PrecomputedRepresentationModel(variant.ab_sceptr()),
+    # PrecomputedRepresentationModel(variant.ab_sceptr()),
     # variant.ab_sceptr_blosum(),
     # variant.ab_sceptr_large(),
     # PrecomputedRepresentationModel(TcrBert()),
+    PrecomputedRepresentationModel(SceptrOCAAT(variant.ab_sceptr_large_cdr3_only_mlm_only())),
 )
 
 NUM_SHOTS = (10, 100, 200)
@@ -55,8 +57,8 @@ def main() -> None:
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
         **get_one_vs_rest_one_shot_results(model),
-        **get_one_vs_rest_few_shot_results(model),
-        **get_one_in_many_results(model)
+        # **get_one_vs_rest_few_shot_results(model),
+        # **get_one_in_many_results(model)
     }
 
 

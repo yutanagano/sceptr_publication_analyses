@@ -1,5 +1,6 @@
 asttokens==2.4.1
 biopython==1.83
+blosum==2.0.3
 certifi==2024.2.2
 charset-normalizer==3.3.2
 comm==0.2.2
@@ -79,6 +80,7 @@ rapidfuzz==3.6.2
 regex==2023.12.25
 requests==2.31.0
 safetensors==0.4.2
+-e git+https://github.com/yutanagano/sceptr.git@59828a43ca3986d5c59e1d85cb8935025eb78efa#egg=sceptr
 scikit-learn==1.4.1.post1
 scipy==1.12.0
 seaborn==0.13.2

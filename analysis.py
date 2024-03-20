@@ -57,8 +57,8 @@ def main() -> None:
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
         **get_one_vs_rest_one_shot_results(model),
-        # **get_one_vs_rest_few_shot_results(model),
-        # **get_one_in_many_results(model)
+        **get_one_vs_rest_few_shot_results(model),
+        **get_one_in_many_results(model)
     }
 
 

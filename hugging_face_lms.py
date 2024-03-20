@@ -29,7 +29,10 @@ class HuggingFaceLM(ABC):
             self._device = torch.device("cpu")
 
         self._tokeniser = self._get_tokeniser()
-        self._model = self._get_model().to(device=self._device)
+        
+        self._model = self._get_model()
+        self._model.to(device=self._device)
+        self._model.eval()
 
     @abstractmethod
     def _get_tokeniser(self) -> PreTrainedTokenizer:
@@ -41,7 +44,7 @@ class HuggingFaceLM(ABC):
     @abstractmethod
     def _get_model(self) -> PreTrainedModel:
         """
-        Return Huggingface model. (no need to worry about device as it is automatically set later)
+        Return Huggingface model. (no need to worry about eval mode or device as they are automatically set later)
         """
         pass
 

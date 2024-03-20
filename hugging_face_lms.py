@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from numpy import ndarray
 from pandas import DataFrame, Series
+import subprocess
 import torch
-from torch import FloatTensor
+from torch import FloatTensor, LongTensor
 from transformers import (
     PreTrainedTokenizer,
     PreTrainedModel,
@@ -101,5 +102,62 @@ class TcrBert(HuggingFaceLM):
 
     def _calc_cdr3_representations(self, cdr3s: Series) -> FloatTensor:
         cdr3s_preprocessed = cdr3s.map(lambda cdr3: " ".join(list(cdr3))).to_list()
-        cdr3s_tokenised = self._tokeniser(cdr3s_preprocessed, return_tensors="pt", padding=True).to(self._device)
-        return self._model(**cdr3s_tokenised).pooler_output
+        cdr3s_embedded = []
+
+        batch_size = 128
+        for idx in range(0, len(cdr3s_preprocessed), batch_size):
+            batch = cdr3s_preprocessed[idx:idx+batch_size]
+            cdr3s_tokenised = self._tokeniser(batch, return_tensors="pt", padding=True).to(self._device)
+            token_embeddings = self._model(**cdr3s_tokenised, output_hidden_states=True).hidden_states[8]
+            avg_pooled_embedding = self._average_pool(cdr3s_tokenised.attention_mask, token_embeddings)
+            cdr3s_embedded.append(avg_pooled_embedding)
+        
+        return torch.concatenate(cdr3s_embedded, dim=0)
+    
+    @staticmethod
+    def _average_pool(attention_mask: LongTensor, embeddings: FloatTensor):
+        new_mask = attention_mask.detach().clone()
+
+        token_sequence_lengths = attention_mask.sum(dim=1)
+
+        new_mask[:,0] = 0
+        new_mask[torch.arange(len(token_sequence_lengths)),token_sequence_lengths-1] = 0
+
+        aa_sequence_lengths = new_mask.sum(dim=1)
+        aa_embeddings = embeddings * new_mask.unsqueeze(dim=-1)
+        avg_pooled_embeddings = aa_embeddings.sum(dim=1) / aa_sequence_lengths.unsqueeze(dim=-1)
+        
+        return avg_pooled_embeddings
+
+
+class ProtBert(HuggingFaceLM):
+    name = "ProtBert"
+
+    def _get_tokeniser(self) -> PreTrainedTokenizer:
+        return BertTokenizer.from_pretrained("Rostlab/prot_bert")
+    
+    def _get_model(self) -> PreTrainedModel:
+        return BertModel.from_pretrained("Rostlab/prot_bert")
+    
+    def _calc_alpha_representations(self, instances: DataFrame) -> FloatTensor:
+        tras = instances[["TRAV", "CDR3A", "TRAJ"]]
+        tras.columns = ["v", "cdr3", "j"]
+        tra_aa_seqs = tras.apply(row_to_tcr_chain, axis=1)
+
+    def _calc_beta_representations(self, instances: DataFrame) -> FloatTensor:
+        pass
+
+
+def row_to_tcr_chain(row: Series) -> str:
+    stitchr_output = subprocess.run(
+        [
+            "stitchr",
+            "-v", row.v,
+            "-j", row.j,
+            "-cdr3", row.cdr3,
+            "-m", "AA"
+        ],
+        capture_output=True
+    )
+    stdout_cleaned = stitchr_output.stdout.decode().strip()
+    return stdout_cleaned

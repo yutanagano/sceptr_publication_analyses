@@ -13,7 +13,7 @@ import random
 from sceptr import variant
 from sceptr_ocaat import SceptrOCAAT
 from sklearn import metrics
-from tcr_bert import TcrBert
+from hugging_face_lms import TcrBert
 from tqdm import tqdm
 from typing import Dict, Iterable, List
 import utils
@@ -35,8 +35,8 @@ MODELS = (
     # PrecomputedRepresentationModel(variant.ab_sceptr()),
     # variant.ab_sceptr_blosum(),
     # variant.ab_sceptr_large(),
-    # PrecomputedRepresentationModel(TcrBert()),
-    PrecomputedRepresentationModel(SceptrOCAAT(variant.ab_sceptr_large_cdr3_only_mlm_only())),
+    PrecomputedRepresentationModel(TcrBert()),
+    # PrecomputedRepresentationModel(SceptrOCAAT(variant.ab_sceptr_large_cdr3_only_mlm_only())),
 )
 
 NUM_SHOTS = (10, 100, 200)

@@ -1,5 +1,5 @@
 /ignore
 /.venv
-/.bio_transformers
+/.precomputed_representation_cache
 /__pycache__
 log*.txt

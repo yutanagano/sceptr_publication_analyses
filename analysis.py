@@ -31,12 +31,11 @@ EPITOPES = LABELLED_DATA.Epitope.unique()
 MODELS = (
     # tcr_metric.Cdr3Levenshtein(),
     # tcr_metric.Tcrdist(),
-    # PrecomputedRepresentationModel(variant.ab_sceptr()),
-    # variant.ab_sceptr_blosum(),
-    # variant.ab_sceptr_large(),
+    PrecomputedRepresentationModel(variant.ab_sceptr()),
+    PrecomputedRepresentationModel(variant.ab_sceptr_cdr3_only()),
     # PrecomputedRepresentationModel(TcrBert()),
     # PrecomputedRepresentationModel(ProtBert()),
-    PrecomputedRepresentationModel(Esm2()),
+    # PrecomputedRepresentationModel(Esm2()),
 )
 
 NUM_SHOTS = (10, 100, 200)

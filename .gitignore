@@ -1,5 +1,7 @@
 /ignore
 /.venv
 /.precomputed_representation_cache
+/tcr_data
+/analysis_results
 /__pycache__
 log*.txt

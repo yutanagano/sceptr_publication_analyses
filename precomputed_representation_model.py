@@ -3,18 +3,14 @@ from numpy import ndarray
 import pandas as pd
 from pandas import DataFrame, Series
 from pathlib import Path
+from paths import CACHE_DIR
 import pickle
 import torch
 from torch import FloatTensor
 from typing import Dict, Optional, Tuple
 
 
-PROJECT_ROOT = Path(__file__).parent.resolve()
-CACHE_DIR = PROJECT_ROOT/".precomputed_representation_cache"
-CACHE_DIR.mkdir(exist_ok=True)
-
-
-class PrecomputedRepresentationModel():
+class CachedRepresentationModel():
     def __init__(self, model) -> None:
         if torch.cuda.is_available():
             self._device = torch.device("cuda:0")
@@ -22,40 +18,19 @@ class PrecomputedRepresentationModel():
             self._device = torch.device("cpu")
 
         self._model = model
-        self._representation_cache_path = CACHE_DIR/f"{model.name}_rep_cache.pkl"
-        self._test_data_representations_cache = self._get_test_data_representations()
+        self._cache_save_path = CACHE_DIR/f"{model.name}_rep_cache.pkl"
+        self._cache = self._load_cahce()
     
-    def _get_test_data_representations(self) -> Dict[Tuple[Optional[str]], FloatTensor]:
-        if not self._representation_cache_path.is_file():
-            representations = self._precompute_test_data_representations()
-            self._save_cache(representations)
-            return representations
+    def _load_cahce(self) -> Dict[Tuple[Optional[str]], FloatTensor]:
+        if not self._cache_save_path.is_file():
+            return dict()
         
-        with open(self._representation_cache_path, "rb") as f:
-            cache = pickle.load(f)
-            return {k: torch.tensor(v, device=self._device) for k, v in cache.items()}
-
-    def _precompute_test_data_representations(self) -> Dict[Tuple[Optional[str]], FloatTensor]:
-        print(f"Precomputing {self._model.name} representations...")
-
-        representations_cache = dict()
-
-        test_data = pd.read_csv(PROJECT_ROOT/"tcr_data"/"preprocessed"/"benchmarking"/"vdjdb_cleaned.csv")
-        tcrs = test_data[["TRAV", "CDR3A", "TRAJ", "TRBV", "CDR3B", "TRBJ"]]
-        tcrs_uniqued = tcrs.drop_duplicates(ignore_index=True)
-        tcr_representations = self._model.calc_vector_representations(tcrs_uniqued)
-        tcr_identifiers = tcrs_uniqued.apply(self._generate_tcr_identifier, axis=1)
-
-        for idx, tcr_identifier in tcr_identifiers.items():
-            representations_cache[tcr_identifier] = torch.tensor(tcr_representations[idx], device=self._device)
-        
-        return representations_cache
+        with open(self._cache_save_path, "rb") as f:
+            return pickle.load(f)
     
-    def _save_cache(self, representations) -> None:
-        moved_to_cpu = {k: v.cpu() for k, v in representations.items()}
-
-        with open(self._representation_cache_path, "wb") as f:
-            pickle.dump(moved_to_cpu, f)
+    def save_cache(self) -> None:
+        with open(self._cache_save_path, "wb") as f:
+            pickle.dump(self._cache, f)
 
     @property
     def name(self) -> str:
@@ -76,12 +51,25 @@ class PrecomputedRepresentationModel():
         return pdist_tensor.cpu().numpy()
 
     def _calc_torch_representations(self, instances: DataFrame) -> FloatTensor:
-        def fetch_cached_representation(tcr_identifier: Tuple[Optional[str]]) -> ndarray:
-            return self._test_data_representations_cache[tcr_identifier]
-        
         tcr_identifiers = instances.apply(self._generate_tcr_identifier, axis=1)
-        representations = tcr_identifiers.map(fetch_cached_representation).to_list()
+        tcr_unseen = tcr_identifiers.map(lambda tcr_id: tcr_id not in self._cache)
+
+        if tcr_unseen.sum() > 0:
+            self._compute_and_cache_representations(instances[tcr_unseen])
+
+        def fetch_torch_representation(tcr_id) -> FloatTensor:
+            return torch.tensor(self._cache[tcr_id], device=self._device)
+
+        representations = tcr_identifiers.map(fetch_torch_representation).to_list()
         return torch.stack(representations)
+    
+    def _compute_and_cache_representations(self, instances: DataFrame) -> None:
+        instances = instances.drop_duplicates(subset=["TRAV", "CDR3A", "TRAJ", "TRBV", "CDR3B", "TRBJ"])
+        representations = self._model.calc_vector_representations(instances)
+        tcr_ids = instances.apply(self._generate_tcr_identifier, axis="columns")
+
+        for tcr_id, representation in zip(tcr_ids, representations):
+            self._cache[tcr_id] = representation
 
     @staticmethod
     def _generate_tcr_identifier(row: Series) -> Tuple[Optional[str]]:

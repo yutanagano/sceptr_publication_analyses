@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame, Series
 from pathlib import Path
-from precomputed_representation_model import PrecomputedRepresentationModel
+from precomputed_representation_model import CachedRepresentationModel
 from pyrepseq.metric import tcr_metric
 from pyrepseq.metric.tcr_metric import TcrMetric
 import random
@@ -23,16 +23,17 @@ logging.basicConfig(filename=f"log_{current_time}.txt", level=logging.INFO)
 
 
 PROJECT_ROOT = Path(__file__).parent.resolve()
-BENCHMARKS_DIR = PROJECT_ROOT/"benchmarks"
+RESULTS_DIR = (PROJECT_ROOT/"analysis_results").resolve(strict=True)
+DATA_DIR = (PROJECT_ROOT/"tcr_data").resolve(strict=True)
 
-LABELLED_DATA = pd.read_csv("tcr_data/preprocessed/benchmarking/vdjdb_cleaned.csv")
+LABELLED_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"vdjdb_cleaned.csv")
 EPITOPES = LABELLED_DATA.Epitope.unique()
 
 MODELS = (
     # tcr_metric.Cdr3Levenshtein(),
     # tcr_metric.Tcrdist(),
-    PrecomputedRepresentationModel(variant.ab_sceptr()),
-    PrecomputedRepresentationModel(variant.ab_sceptr_cdr3_only()),
+    CachedRepresentationModel(variant.ab_sceptr()),
+    # PrecomputedRepresentationModel(variant.ab_sceptr_cdr3_only()),
     # PrecomputedRepresentationModel(TcrBert()),
     # PrecomputedRepresentationModel(ProtBert()),
     # PrecomputedRepresentationModel(Esm2()),
@@ -43,21 +44,23 @@ NUM_RANDOM_FOLDS = 100
 
 
 def main() -> None:
-    BENCHMARKS_DIR.mkdir(exist_ok=True)
-
     results_per_model = {
         model.name: get_results(model) for model in MODELS
     }
 
     for model_name, results in results_per_model.items():
         save_results(model_name, results)
+    
+    for model in MODELS:
+        if isinstance(model, CachedRepresentationModel):
+            model.save_cache()
 
 
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
         **get_one_vs_rest_one_shot_results(model),
-        **get_one_vs_rest_few_shot_results(model),
-        **get_one_in_many_results(model)
+        # **get_one_vs_rest_few_shot_results(model),
+        # **get_one_in_many_results(model)
     }
 
 
@@ -243,7 +246,7 @@ def log_sample_indices(df: DataFrame, k: int, model: TcrMetric) -> None:
 
 
 def save_results(model_name: str, results: Dict[str, DataFrame]) -> None:
-    model_dir = BENCHMARKS_DIR/model_name
+    model_dir = RESULTS_DIR/model_name
     model_dir.mkdir(exist_ok=True)
     
     for benchmark_type, results_table in results.items():

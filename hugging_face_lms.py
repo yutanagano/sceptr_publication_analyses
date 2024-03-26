@@ -111,7 +111,7 @@ class TcrBert(HuggingFaceLM):
         for idx in range(0, len(cdr3s_preprocessed), batch_size):
             batch = cdr3s_preprocessed[idx:idx+batch_size]
             cdr3s_tokenised = self._tokeniser(batch, return_tensors="pt", padding=True).to(self._device)
-            token_embeddings = self._model(**cdr3s_tokenised, output_hidden_states=True).hidden_states[8]
+            token_embeddings = self._model(**cdr3s_tokenised, output_hidden_states=True).hidden_states[7]
             token_mask = compute_token_mask_special_tokens_sandwiching_sequence(cdr3s_tokenised.attention_mask)
             avg_pooled_embedding = average_pool(token_mask, token_embeddings)
             cdr3s_embedded.append(avg_pooled_embedding)

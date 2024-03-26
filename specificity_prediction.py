@@ -5,8 +5,8 @@ import logging
 import numpy as np
 import pandas as pd
 from pandas import DataFrame, Series
-from pathlib import Path
-from precomputed_representation_model import CachedRepresentationModel
+from paths import DATA_DIR, RESULTS_DIR
+from cached_representation_model import CachedRepresentationModel
 from pyrepseq.metric import tcr_metric
 from pyrepseq.metric.tcr_metric import TcrMetric
 import random
@@ -22,10 +22,6 @@ current_time = datetime.now().isoformat()
 logging.basicConfig(filename=f"log_{current_time}.txt", level=logging.INFO)
 
 
-PROJECT_ROOT = Path(__file__).parent.resolve()
-RESULTS_DIR = (PROJECT_ROOT/"analysis_results").resolve(strict=True)
-DATA_DIR = (PROJECT_ROOT/"tcr_data").resolve(strict=True)
-
 LABELLED_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"vdjdb_cleaned.csv")
 EPITOPES = LABELLED_DATA.Epitope.unique()
 
@@ -35,7 +31,7 @@ MODELS = (
     CachedRepresentationModel(variant.ab_sceptr()),
     # PrecomputedRepresentationModel(variant.ab_sceptr_cdr3_only()),
     # PrecomputedRepresentationModel(TcrBert()),
-    # PrecomputedRepresentationModel(ProtBert()),
+    CachedRepresentationModel(ProtBert()),
     # PrecomputedRepresentationModel(Esm2()),
 )
 

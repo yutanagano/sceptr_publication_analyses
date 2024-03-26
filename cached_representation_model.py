@@ -57,9 +57,6 @@ class CachedRepresentationModel():
         if tcr_unseen.sum() > 0:
             self._compute_and_cache_representations(instances[tcr_unseen])
 
-        def fetch_torch_representation(tcr_id) -> FloatTensor:
-            return torch.tensor(self._cache[tcr_id], device=self._device)
-
         representations = tcr_identifiers.map(lambda tcr_id: self._cache[tcr_id]).to_list()
         representations_stacked = np.stack(representations)
         return torch.tensor(representations_stacked, device=self._device)

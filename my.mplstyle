@@ -1,0 +1,8 @@
+font.family : Fira Sans
+
+text.color : 212529
+
+axes.facecolor : e9ecef
+axes.titlecolor : 212529
+
+figure.facecolor : white

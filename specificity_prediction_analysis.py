@@ -26,16 +26,19 @@ LABELLED_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"vdjdb_cleane
 EPITOPES = LABELLED_DATA.Epitope.unique()
 
 MODELS = (
-    # tcr_metric.Cdr3Levenshtein(),
-    # tcr_metric.Tcrdist(),
+    tcr_metric.Cdr3Levenshtein(),
+    tcr_metric.CdrLevenshtein(),
+    tcr_metric.Tcrdist(),
     CachedRepresentationModel(variant.ab_sceptr()),
-    # PrecomputedRepresentationModel(variant.ab_sceptr_cdr3_only()),
-    # PrecomputedRepresentationModel(TcrBert()),
+    CachedRepresentationModel(variant.ab_sceptr_cdr3_only()),
+    CachedRepresentationModel(variant.ab_sceptr_mlm_only()),
+    CachedRepresentationModel(variant.ab_sceptr_cdr3_only_mlm_only()),
+    CachedRepresentationModel(TcrBert()),
     CachedRepresentationModel(ProtBert()),
-    # PrecomputedRepresentationModel(Esm2()),
+    CachedRepresentationModel(Esm2()),
 )
 
-NUM_SHOTS = (10, 100, 200)
+NUM_SHOTS = (2, 5, 10, 20, 50, 100, 200)
 NUM_RANDOM_FOLDS = 100
 
 
@@ -54,9 +57,9 @@ def main() -> None:
 
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
-        **get_one_vs_rest_one_shot_results(model),
+        # **get_one_vs_rest_one_shot_results(model),
         # **get_one_vs_rest_few_shot_results(model),
-        # **get_one_in_many_results(model)
+        **get_one_in_many_results(model)
     }
 
 

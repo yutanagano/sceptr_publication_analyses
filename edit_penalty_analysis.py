@@ -2,6 +2,7 @@ from cached_representation_model import CachedRepresentationModel
 from datetime import datetime
 import edit_penalty
 from edit_penalty import EditPenaltyCollection
+from hugging_face_lms import TcrBert
 import logging
 import pandas as pd
 from paths import DATA_DIR, RESULTS_DIR
@@ -11,7 +12,8 @@ from sceptr import variant
 BACKGROUND_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"tanno"/"test.csv")
 
 MODELS = (
-    CachedRepresentationModel(variant.ab_sceptr()),
+    variant.ab_sceptr(),
+    TcrBert(),
 )
 
 
@@ -27,7 +29,8 @@ def main():
     for model_name, edit_penalty_collection in epc_per_model.items():
         model_dir = RESULTS_DIR/model_name
         model_dir.mkdir(exist_ok=True)
-        edit_penalty_collection.save(model_dir/"epc_state_dict.pkl")
+        with open(model_dir/"epc_state_dict.pkl", "wb") as f:
+            edit_penalty_collection.save(f)
     
     for model in MODELS:
         if isinstance(model, CachedRepresentationModel):
@@ -40,7 +43,7 @@ def explore_edit_penalties(model) -> EditPenaltyCollection:
     edit_penalty_collection = EditPenaltyCollection()
     num_tcrs_processed = 0
 
-    while not edit_penalty_collection.has_sufficient_coverage():
+    while not (edit_penalty_collection.has_sufficient_coverage() and num_tcrs_processed >= 1000):
         tcr = BACKGROUND_DATA.sample(n=1)
         tcr_variants = edit_penalty.get_all_tcr_variants(tcr)
         distances = model.calc_cdist_matrix(tcr, tcr_variants).squeeze()

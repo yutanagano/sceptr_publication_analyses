@@ -3,5 +3,5 @@
 /.representation_cache
 /tcr_data
 /analysis_results
-/__pycache__
+__pycache__
 log*.txt

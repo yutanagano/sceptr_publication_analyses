@@ -12,8 +12,9 @@ from sceptr import variant
 BACKGROUND_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"tanno"/"test.csv")
 
 MODELS = (
-    variant.ab_sceptr(),
-    TcrBert(),
+    # variant.ab_sceptr(),
+    variant.ab_sceptr_classic(),
+    # TcrBert(),
 )
 
 

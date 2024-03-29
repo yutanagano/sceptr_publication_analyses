@@ -1,9 +1,8 @@
 import blosum
 import itertools
-from matplotlib.figure import Figure
-from matplotlib import pyplot as plt
 import math
 import numpy as np
+from pandas import DataFrame
 from typing import Iterable, List, Optional, Set
 
 from edit_penalty.edit_penalty_collection import EditPenaltyCollection
@@ -21,62 +20,18 @@ class EditPenaltyCollectionAnalyser:
     ) -> None:
         self.edit_record_collection = tcr_edit_record_collection
 
-    def make_summary_dict(self) -> dict:
+    def get_summary_df(self) -> DataFrame:
         insertion_distances = self._get_insertion_distances_over_positions()
         deletion_distances = self._get_deletion_distances_over_positions()
         substitution_distances = self._get_substitution_distances_over_positions()
 
-        def get_distance_std_dict(mean_distances, standard_deviations) -> dict:
-            return {
-                "mean_distances": mean_distances,
-                "standard_deviations": standard_deviations,
-            }
+        df = DataFrame(index = [position.name for position in Position])
 
-        summary = dict()
+        df[["ins", "ins_std"]] = insertion_distances
+        df[["del", "del_std"]] = deletion_distances
+        df[["sub", "sub_std"]] = substitution_distances
 
-        summary["insertions"] = get_distance_std_dict(*insertion_distances)
-        summary["deletions"] = get_distance_std_dict(*deletion_distances)
-        summary["substitutions"] = get_distance_std_dict(*substitution_distances)
-
-        return summary
-
-    def make_summary_figure(self) -> Figure:
-        insertion_distances = self._get_insertion_distances_over_positions()
-        deletion_distances = self._get_deletion_distances_over_positions()
-        substitution_distances = self._get_substitution_distances_over_positions()
-
-        violin_position_array = np.arange(len(Position)) * 6
-
-        fig, ax = plt.subplots()
-
-        ax.errorbar(
-            violin_position_array,
-            insertion_distances[0],
-            yerr=insertion_distances[1],
-            fmt="o",
-        )
-        ax.errorbar(
-            violin_position_array + 1,
-            deletion_distances[0],
-            yerr=deletion_distances[1],
-            fmt="o",
-        )
-        ax.errorbar(
-            violin_position_array + 2,
-            substitution_distances[0],
-            yerr=substitution_distances[1],
-            fmt="o",
-        )
-        ax.set_xticks(
-            violin_position_array + 1, [position.name for position in Position]
-        )
-
-        ax.set_ylim(0)
-
-        ax.set_ylabel("distance")
-        ax.set_xlabel("CDR3 region")
-
-        return fig
+        return df
 
     def get_average_distance_over_central_edits(self) -> float:
         central_insertions = [edit for edit in self._get_all_junction_aa_insertions() if edit.is_central]
@@ -100,7 +55,7 @@ class EditPenaltyCollectionAnalyser:
             for edits in insertions_over_positions
         ]
 
-        return list(zip(*distances_over_positions))
+        return distances_over_positions
 
     def _get_deletion_distances_over_positions(self) -> List[List[float]]:
         all_deletions = self._get_all_junction_aa_deletions()
@@ -113,7 +68,7 @@ class EditPenaltyCollectionAnalyser:
             for edits in deletions_over_positions
         ]
 
-        return list(zip(*distances_over_positions))
+        return distances_over_positions
 
     def _get_substitution_distances_over_positions(self) -> List[List[float]]:
         all_substitutions = self._get_all_junction_aa_substitutions()
@@ -126,43 +81,7 @@ class EditPenaltyCollectionAnalyser:
             for edits in substitutions_over_positions
         ]
 
-        return list(zip(*distances_over_positions))
-
-    def _generate_distance_violinplot_over_junction_positions(
-        self, distances_over_junction_positions: List[Iterable[float]], title: str
-    ) -> Figure:
-        fig, ax = plt.subplots()
-
-        ax.violinplot(distances_over_junction_positions, positions=range(len(Position)))
-        ax.set_xticks(range(len(Position)), [position.name for position in Position])
-        ax.set_title(title)
-
-        return fig
-
-    def make_substitution_distance_vs_blosum_figure(self) -> Figure:
-        blosum_similarities = []
-        model_distances = []
-
-        for from_residue, to_residue in itertools.permutations(Residue, r=2):
-            blosum_similarity = blosum.BLOSUM(62)[from_residue.name][to_residue.name]
-            model_distance = self._get_average_distance_for_central_substitution(
-                from_residue, to_residue
-            )
-
-            estimation_impossible_due_to_missing_data = model_distance is None
-            if estimation_impossible_due_to_missing_data:
-                continue
-
-            blosum_similarities.append(blosum_similarity)
-            model_distances.append(model_distance)
-
-        fig, ax = plt.subplots()
-
-        ax.scatter(blosum_similarities, model_distances, alpha=0.2)
-        ax.set_xlabel("BLOSUM62 similarity")
-        ax.set_ylabel("Model distance")
-
-        return fig
+        return distances_over_positions
 
     def _get_all_junction_aa_insertions(self) -> Set[JunctionEdit]:
         return {

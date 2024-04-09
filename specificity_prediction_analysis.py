@@ -59,7 +59,7 @@ def main() -> None:
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
         # **get_one_vs_rest_one_shot_results(model),
-        # **get_one_vs_rest_few_shot_results(model),
+        **get_one_vs_rest_few_shot_results(model),
         **get_one_in_many_results(model)
     }
 
@@ -71,6 +71,11 @@ def get_one_vs_rest_one_shot_results(model: TcrMetric) -> Dict[str, DataFrame]:
     for epitope in tqdm(EPITOPES):
         labelled_data_epitope_mask = LABELLED_DATA.Epitope == epitope
         epitope_references = LABELLED_DATA[labelled_data_epitope_mask]
+
+        if len(epitope_references) - 1 < 100:
+            logging.debug(f"Not enough references for {epitope}, skipping")
+            continue
+
         cdist_matrix = model.calc_cdist_matrix(LABELLED_DATA, epitope_references)
 
         aucs = []

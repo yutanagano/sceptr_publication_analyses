@@ -3,5 +3,7 @@
 /.representation_cache
 /tcr_data
 /analysis_results
+*.svg
+*.pdf
 __pycache__
 log*.txt

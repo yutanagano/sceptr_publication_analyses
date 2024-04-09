@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import datetime
 from few_shot_predictor import FewShotOneVsRestPredictor, FewShotOneInManyPredictor
+from itertools import chain
 import logging
 import numpy as np
 import pandas as pd
@@ -83,7 +84,7 @@ def get_one_vs_rest_one_shot_results(model: TcrMetric) -> Dict[str, DataFrame]:
             aucs.append(metrics.roc_auc_score(ground_truth, similarities))
 
         auc_summary = generate_summary(epitope, aucs, "auc")
-        results.append(auc_summary)
+        results.extend(auc_summary)
     
     return {"one_vs_rest_1_shot": DataFrame.from_records(results)}
 
@@ -119,8 +120,8 @@ def get_one_vs_rest_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFr
 
         auc_summaries = get_one_vs_rest_k_shot_auc_summaries_for_epitope(model, epitope, ref_index_sets)
 
-        nn_results.append(auc_summaries["nn"])
-        avg_dist_results.append(auc_summaries["avg_dist"])
+        nn_results.extend(auc_summaries["nn"])
+        avg_dist_results.extend(auc_summaries["avg_dist"])
 
     return {
         f"one_vs_rest_{k}_shot_nn": DataFrame.from_records(nn_results),
@@ -128,7 +129,7 @@ def get_one_vs_rest_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFr
     }
 
 
-def get_one_vs_rest_k_shot_auc_summaries_for_epitope(model: TcrMetric, epitope: str, ref_index_sets: Iterable[List[int]]) -> Dict[str, Dict[str, float]]:
+def get_one_vs_rest_k_shot_auc_summaries_for_epitope(model: TcrMetric, epitope: str, ref_index_sets: Iterable[List[int]]) -> Dict[str, List[Dict]]:
     nn_aucs = []
     avg_dist_aucs = []
     
@@ -208,20 +209,16 @@ def get_one_in_many_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFr
     ]
 
     return {
-        f"one_in_many_{k}_shot_nn": DataFrame.from_records(nn_summaries),
-        f"one_in_many_{k}_shot_avg_dist": DataFrame.from_records(avg_dist_summaries)
+        f"one_in_many_{k}_shot_nn": DataFrame.from_records(list(chain.from_iterable(nn_summaries))),
+        f"one_in_many_{k}_shot_avg_dist": DataFrame.from_records(list(chain.from_iterable(avg_dist_summaries)))
     }
 
 
-def generate_summary(epitope: str, measures: Iterable[float], measure_name: str) -> Dict[str, float]:
-    return {
-        "epitope": epitope,
-        f"mean_{measure_name}": np.mean(measures),
-        f"std_{measure_name}": np.std(measures),
-        f"median_{measure_name}": np.median(measures),
-        f"upper_quartile_{measure_name}": np.quantile(measures, q=0.75),
-        f"lower_quartile_{measure_name}": np.quantile(measures, q=0.25),
-    }
+def generate_summary(epitope: str, measures: Iterable[float], measure_name: str) -> List[Dict]:
+    records = [
+        {"epitope": epitope, "split": idx, measure_name: measure} for idx, measure in enumerate(measures)
+    ]
+    return records
 
 
 def get_avg_rank_per_epitope(scores: DataFrame, true_labels: Series) -> Dict[str, float]:

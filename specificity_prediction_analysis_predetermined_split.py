@@ -28,10 +28,11 @@ TEST_DATA_UNSEEN_EPITOPES = TEST_DATA[TEST_DATA.Epitope.map(lambda ep: ep not in
 UNSEEN_EPITOPES = TEST_DATA_UNSEEN_EPITOPES.Epitope.unique()
 
 MODELS = (
-    tcr_metric.Cdr3Levenshtein(),
-    tcr_metric.CdrLevenshtein(),
-    tcr_metric.Tcrdist(),
-    CachedRepresentationModel(variant.default()),
+    # tcr_metric.Cdr3Levenshtein(),
+    # tcr_metric.CdrLevenshtein(),
+    # tcr_metric.Tcrdist(),
+    # CachedRepresentationModel(variant.default()),
+    CachedRepresentationModel(variant.finetuned()),
     # CachedRepresentationModel(variant.cdr3_only()),
     # CachedRepresentationModel(variant.mlm_only()),
     # CachedRepresentationModel(variant.cdr3_only_mlm_only()),
@@ -40,9 +41,9 @@ MODELS = (
     # CachedRepresentationModel(variant.average_pooling()),
     # CachedRepresentationModel(variant.unpaired()),
     # CachedRepresentationModel(variant.dropout_noise_only()),
-    CachedRepresentationModel(TcrBert()),
-    CachedRepresentationModel(ProtBert()),
-    CachedRepresentationModel(Esm2()),
+    # CachedRepresentationModel(TcrBert()),
+    # CachedRepresentationModel(ProtBert()),
+    # CachedRepresentationModel(Esm2()),
 )
 
 NUM_SHOTS = (2, 5, 10, 20, 50, 100, 200)

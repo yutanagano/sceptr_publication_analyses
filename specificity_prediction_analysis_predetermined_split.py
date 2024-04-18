@@ -1,16 +1,20 @@
 from datetime import datetime
 from few_shot_predictor import FewShotOneVsRestPredictor
 import logging
+import numpy as np
 import pandas as pd
 from pandas import DataFrame
 from paths import DATA_DIR, RESULTS_DIR
 from cached_representation_model import CachedRepresentationModel
 from pyrepseq.metric import tcr_metric
 from pyrepseq.metric.tcr_metric import TcrMetric
+import random
 from sceptr import variant
 from sklearn import metrics
 from hugging_face_lms import TcrBert, ProtBert, Esm2
-from typing import Dict
+from tqdm import tqdm
+from typing import Dict, Iterable, List
+import utils
 
 
 current_time = datetime.now().isoformat()
@@ -19,6 +23,9 @@ logging.basicConfig(filename=f"log_{current_time}.txt", level=logging.INFO)
 
 TRAIN_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"train.csv")
 TEST_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"test.csv")
+
+TEST_DATA_UNSEEN_EPITOPES = TEST_DATA[TEST_DATA.Epitope.map(lambda ep: ep not in TRAIN_DATA.Epitope.unique())]
+UNSEEN_EPITOPES = TEST_DATA_UNSEEN_EPITOPES.Epitope.unique()
 
 MODELS = (
     tcr_metric.Cdr3Levenshtein(),
@@ -30,6 +37,9 @@ MODELS = (
     CachedRepresentationModel(ProtBert()),
     CachedRepresentationModel(Esm2()),
 )
+
+NUM_SHOTS = (2, 5, 10, 20, 50, 100, 200)
+NUM_RANDOM_FOLDS = 100
 
 
 def main() -> None:
@@ -46,7 +56,14 @@ def main() -> None:
 
 
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
-    print(f"Commencing OVR for {model.name}...")
+    return {
+        **get_predetermined_split_results(model)
+        **get_one_vs_rest_one_shot_results(model)
+    }
+
+
+def get_predetermined_split_results(model: TcrMetric) -> Dict[str, DataFrame]:
+    print(f"Commencing OVR (predetermined split) for {model.name}...")
 
     nn_results = []
     avg_dist_results = []
@@ -70,6 +87,108 @@ def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
         f"one_vs_rest_predetermined_split_nn": DataFrame.from_records(nn_results),
         f"one_vs_rest_predetermined_split_avg_dist": DataFrame.from_records(avg_dist_results),
     }
+
+
+def get_one_vs_rest_one_shot_results(model: TcrMetric) -> Dict[str, DataFrame]:
+    print(f"Commencing OVR[1-shot] (unseen epitopes) for {model.name}...")
+
+    results = []
+    for epitope in tqdm(UNSEEN_EPITOPES):
+        labelled_data_epitope_mask = TEST_DATA_UNSEEN_EPITOPES.Epitope == epitope
+        epitope_references = TEST_DATA_UNSEEN_EPITOPES[labelled_data_epitope_mask]
+
+        if len(epitope_references) - 1 < 100:
+            logging.debug(f"Not enough references for {epitope}, skipping")
+            continue
+
+        cdist_matrix = model.calc_cdist_matrix(TEST_DATA_UNSEEN_EPITOPES, epitope_references)
+
+        aucs = []
+        for cdist_idx, tcr_idx in enumerate(epitope_references.index):
+            dists = cdist_matrix[:,cdist_idx]
+            similarities = utils.convert_dists_to_scores(dists)
+
+            similarities = np.delete(similarities, tcr_idx)
+            ground_truth = np.delete(labelled_data_epitope_mask, tcr_idx)
+
+            aucs.append(metrics.roc_auc_score(ground_truth, similarities))
+
+        auc_summary = generate_summary(epitope, aucs, "auc")
+        results.extend(auc_summary)
+    
+    return {"one_vs_rest_unseen_epitopes_1_shot": DataFrame.from_records(results)}
+
+
+def get_one_vs_rest_few_shot_results(model: TcrMetric) -> Dict[str, DataFrame]:
+    results = dict()
+    for num_shots in NUM_SHOTS:
+        k_shot_results = get_one_vs_rest_k_shot_results(model, k=num_shots)
+        results.update(k_shot_results)
+    return results
+
+
+def get_one_vs_rest_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFrame]:
+    print(f"Commencing OVR[{k}-shot] for {model.name}...")
+
+    nn_results = []
+    avg_dist_results = []
+    
+    for epitope in tqdm(UNSEEN_EPITOPES):
+        labelled_data_epitope_mask = TEST_DATA_UNSEEN_EPITOPES.Epitope == epitope
+        epitope_references = TEST_DATA_UNSEEN_EPITOPES[labelled_data_epitope_mask]
+        ref_index_sets = epitope_references.index.to_list()
+
+        if len(epitope_references) - k < 100:
+            logging.debug(f"Not enough references for {epitope} for {k} shots, skipping")
+            continue
+
+        random.seed("tcrsarecool")
+        ref_index_sets = [
+            random.sample(ref_index_sets, k=k) for _ in range(NUM_RANDOM_FOLDS)
+        ]
+        logging.info(f"{model.name}:OVR[{k}-shot]:{epitope}: {ref_index_sets[0][:2]}")
+
+        auc_summaries = get_one_vs_rest_k_shot_auc_summaries_for_epitope(model, epitope, ref_index_sets)
+
+        nn_results.extend(auc_summaries["nn"])
+        avg_dist_results.extend(auc_summaries["avg_dist"])
+
+    return {
+        f"one_vs_rest_unseen_epitopes_{k}_shot_nn": DataFrame.from_records(nn_results),
+        f"one_vs_rest_unseen_epitopes_{k}_shot_avg_dist": DataFrame.from_records(avg_dist_results),
+    }
+
+
+def get_one_vs_rest_k_shot_auc_summaries_for_epitope(model: TcrMetric, epitope: str, ref_index_sets: Iterable[List[int]]) -> Dict[str, List[Dict]]:
+    nn_aucs = []
+    avg_dist_aucs = []
+    
+    for ref_index_set in ref_index_sets:
+        positive_refs = TEST_DATA_UNSEEN_EPITOPES.loc[ref_index_set]
+        queries = TEST_DATA_UNSEEN_EPITOPES.drop(index=ref_index_set)
+        ground_truth = queries.Epitope == epitope
+        predictor = FewShotOneVsRestPredictor(model, positive_refs=positive_refs, queries=queries)
+
+        nn_scores = predictor.get_nn_inferences()
+        avg_dist_scores = predictor.get_avg_dist_inferences()
+
+        nn_auc = metrics.roc_auc_score(ground_truth, nn_scores)
+        avg_dist_auc = metrics.roc_auc_score(ground_truth, avg_dist_scores)
+
+        nn_aucs.append(nn_auc)
+        avg_dist_aucs.append(avg_dist_auc)
+    
+    return {
+        "nn": generate_summary(epitope, nn_aucs, "auc"),
+        "avg_dist": generate_summary(epitope, avg_dist_aucs, "auc")
+    }
+
+
+def generate_summary(epitope: str, measures: Iterable[float], measure_name: str) -> List[Dict]:
+    records = [
+        {"epitope": epitope, "split": idx, measure_name: measure} for idx, measure in enumerate(measures)
+    ]
+    return records
 
 
 def save_results(model_name: str, results: Dict[str, DataFrame]) -> None:

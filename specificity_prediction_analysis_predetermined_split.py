@@ -24,7 +24,7 @@ logging.basicConfig(filename=f"log_{current_time}.txt", level=logging.INFO)
 TRAIN_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"train.csv")
 TEST_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"test.csv")
 
-TEST_DATA_UNSEEN_EPITOPES = TEST_DATA[TEST_DATA.Epitope.map(lambda ep: ep not in TRAIN_DATA.Epitope.unique())]
+TEST_DATA_UNSEEN_EPITOPES = TEST_DATA[TEST_DATA.Epitope.map(lambda ep: ep not in TRAIN_DATA.Epitope.unique())].reset_index(drop=True)
 UNSEEN_EPITOPES = TEST_DATA_UNSEEN_EPITOPES.Epitope.unique()
 
 MODELS = (
@@ -64,8 +64,9 @@ def main() -> None:
 
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
-        **get_predetermined_split_results(model)
-        **get_one_vs_rest_one_shot_results(model)
+        **get_predetermined_split_results(model),
+        **get_one_vs_rest_one_shot_results(model),
+        **get_one_vs_rest_few_shot_results(model)
     }
 
 

@@ -21,7 +21,7 @@ current_time = datetime.now().isoformat()
 logging.basicConfig(filename=f"log_{current_time}.txt", level=logging.INFO)
 
 
-TRAIN_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"train.csv")
+TRAIN_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"train_valid.csv")
 TEST_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"test.csv")
 
 TEST_DATA_UNSEEN_EPITOPES = TEST_DATA[TEST_DATA.Epitope.map(lambda ep: ep not in TRAIN_DATA.Epitope.unique())].reset_index(drop=True)

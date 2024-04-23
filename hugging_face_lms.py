@@ -89,7 +89,7 @@ class HuggingFaceLM(ABC):
 
 
 class TcrBert(HuggingFaceLM):
-    name = "TCR BERT"
+    name = "TCR-BERT"
 
     def _get_tokeniser(self) -> PreTrainedTokenizer:
         return BertTokenizer.from_pretrained("wukevin/tcr-bert")

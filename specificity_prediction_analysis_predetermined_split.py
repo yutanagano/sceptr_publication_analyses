@@ -44,9 +44,9 @@ MODELS = (
     # CachedRepresentationModel(variant.average_pooling()),
     # CachedRepresentationModel(variant.unpaired()),
     # CachedRepresentationModel(variant.dropout_noise_only()),
-    CachedRepresentationModel(TcrBert()),
-    CachedRepresentationModel(ProtBert()),
-    CachedRepresentationModel(Esm2()),
+    # CachedRepresentationModel(TcrBert()),
+    # CachedRepresentationModel(ProtBert()),
+    # CachedRepresentationModel(Esm2()),
 )
 
 NUM_SHOTS = (2, 5, 10, 20, 50, 100, 200)
@@ -69,9 +69,10 @@ def main() -> None:
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
         **get_discrimination_results(model),
+        **get_discrimination_avg_rank(model),
         **get_detection_results(model),
-        **get_one_vs_rest_one_shot_unseen_results(model),
-        **get_one_vs_rest_few_shot_unseen_results(model)
+        # **get_one_vs_rest_one_shot_unseen_results(model),
+        # **get_one_vs_rest_few_shot_unseen_results(model)
     }
 
 

@@ -15,9 +15,11 @@ current_time = datetime.now().isoformat()
 logging.basicConfig(filename=f"log_{current_time}.txt", level=logging.INFO)
 
 
-BACKGROUND_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"tanno"/"test.csv").sample(n=10_000, random_state=420)
+bg_data = pd.read_csv(DATA_DIR/"preprocessed"/"tanno"/"test.csv")
+BACKGROUND_SAMPLE = bg_data.sample(n=10_000, random_state=420)
+
 MODELS = (
-    CachedRepresentationModel(variant.ab_sceptr()),
+    CachedRepresentationModel(variant.default()),
     tcr_metric.Tcrdist(),
 )
 
@@ -39,18 +41,20 @@ def get_results(model) -> DataFrame:
     print(f"Computing pgen density estimates for {model.name}...")
 
     results = DataFrame()
-    results["pgen"] = BACKGROUND_DATA.apply(
+    results["pgen"] = BACKGROUND_SAMPLE.apply(
         lambda row: row["alpha_pgen"] * row["beta_pgen"],
         axis="columns"
     )
 
     batch_size = 100
+    k = 10
     all_nn_dists = []
-    for idx in tqdm(range(0, len(BACKGROUND_DATA), batch_size)):
-        batch = BACKGROUND_DATA.iloc[idx:idx+batch_size]
-        dists: ndarray = model.calc_cdist_matrix(batch, BACKGROUND_DATA)
-        nn_dists = np.partition(dists, kth=1, axis=1)[:,1]
-        all_nn_dists.append(nn_dists)
+    for idx in tqdm(range(0, len(BACKGROUND_SAMPLE), batch_size)):
+        batch = BACKGROUND_SAMPLE.iloc[idx:idx+batch_size]
+        dists: ndarray = model.calc_cdist_matrix(batch, BACKGROUND_SAMPLE)
+        nn_dists = np.partition(dists, kth=k, axis=1)[:,:k]
+        nn_dists_averaged = nn_dists.mean(axis=1)
+        all_nn_dists.append(nn_dists_averaged)
     results["nn_dist"] = np.concatenate(all_nn_dists)
 
     return results

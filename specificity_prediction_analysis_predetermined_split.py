@@ -44,9 +44,9 @@ MODELS = (
     # CachedRepresentationModel(variant.average_pooling()),
     # CachedRepresentationModel(variant.unpaired()),
     # CachedRepresentationModel(variant.dropout_noise_only()),
-    # CachedRepresentationModel(TcrBert()),
-    # CachedRepresentationModel(ProtBert()),
-    # CachedRepresentationModel(Esm2()),
+    CachedRepresentationModel(TcrBert()),
+    CachedRepresentationModel(ProtBert()),
+    CachedRepresentationModel(Esm2()),
 )
 
 NUM_SHOTS = (2, 5, 10, 20, 50, 100, 200)
@@ -71,8 +71,8 @@ def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
         **get_discrimination_results(model),
         **get_discrimination_avg_rank(model),
         **get_detection_results(model),
-        # **get_one_vs_rest_one_shot_unseen_results(model),
-        # **get_one_vs_rest_few_shot_unseen_results(model)
+        **get_one_vs_rest_one_shot_unseen_results(model),
+        **get_one_vs_rest_few_shot_unseen_results(model)
     }
 
 
@@ -114,9 +114,16 @@ def get_discrimination_avg_rank(model: TcrMetric) -> Dict[str, DataFrame]:
     nn_avg_rank_per_epitope = get_avg_rank_per_epitope(nn_scores_table, TEST_DATA_DISCRIMINATION["Epitope"])
     avg_dist_avg_rank_per_epitope = get_avg_rank_per_epitope(avg_dist_scores_table, TEST_DATA_DISCRIMINATION["Epitope"])
 
+    nn_df = DataFrame.from_records([
+        {"epitope": epitope, "avg_rank": avg_rank} for epitope, avg_rank in nn_avg_rank_per_epitope.items()
+    ])
+    avg_dist_df = DataFrame.from_records([
+        {"epitope": epitope, "avg_rank": avg_rank} for epitope, avg_rank in avg_dist_avg_rank_per_epitope.items()
+    ])
+
     return {
-        f"discrimination_oim_predetermined_split_nn": DataFrame.from_dict(nn_avg_rank_per_epitope, orient="index", columns=["avg_rank"]),
-        f"discrimination_oim_predetermined_split_avg_dist": DataFrame.from_dict(avg_dist_avg_rank_per_epitope, orient="index", columns=["avg_rank"])
+        f"discrimination_oim_predetermined_split_nn": nn_df,
+        f"discrimination_oim_predetermined_split_avg_dist": avg_dist_df
     }
 
 

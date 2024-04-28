@@ -23,14 +23,14 @@ current_time = datetime.now().isoformat()
 logging.basicConfig(filename=f"log_{current_time}.txt", level=logging.INFO)
 
 
-LABELLED_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"vdjdb_cleaned.csv")
+LABELLED_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"combined.csv")
 EPITOPES = LABELLED_DATA.Epitope.unique()
 
 MODELS = (
-    # tcr_metric.Cdr3Levenshtein(),
+    tcr_metric.Cdr3Levenshtein(),
     # tcr_metric.CdrLevenshtein(),
-    # tcr_metric.Tcrdist(),
-    # CachedRepresentationModel(variant.default()),
+    tcr_metric.Tcrdist(),
+    CachedRepresentationModel(variant.default()),
     # CachedRepresentationModel(variant.cdr3_only()),
     # CachedRepresentationModel(variant.mlm_only()),
     # CachedRepresentationModel(variant.cdr3_only_mlm_only()),
@@ -38,10 +38,10 @@ MODELS = (
     # CachedRepresentationModel(variant.olga()),
     # CachedRepresentationModel(variant.average_pooling()),
     # CachedRepresentationModel(variant.unpaired()),
-    CachedRepresentationModel(variant.dropout_noise_only()),
-    # CachedRepresentationModel(TcrBert()),
-    # CachedRepresentationModel(ProtBert()),
-    # CachedRepresentationModel(Esm2()),
+    # CachedRepresentationModel(variant.dropout_noise_only()),
+    CachedRepresentationModel(TcrBert()),
+    CachedRepresentationModel(ProtBert()),
+    CachedRepresentationModel(Esm2()),
 )
 
 NUM_SHOTS = (2, 5, 10, 20, 50, 100, 200)

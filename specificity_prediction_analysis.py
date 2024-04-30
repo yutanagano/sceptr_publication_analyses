@@ -23,7 +23,7 @@ current_time = datetime.now().isoformat()
 logging.basicConfig(filename=f"log_{current_time}.txt", level=logging.INFO)
 
 
-LABELLED_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"combined.csv")
+LABELLED_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"vdjdb_cleaned.csv")
 EPITOPES = LABELLED_DATA.Epitope.unique()
 
 MODELS = (
@@ -31,14 +31,14 @@ MODELS = (
     # tcr_metric.CdrLevenshtein(),
     tcr_metric.Tcrdist(),
     CachedRepresentationModel(variant.default()),
-    # CachedRepresentationModel(variant.cdr3_only()),
-    # CachedRepresentationModel(variant.mlm_only()),
-    # CachedRepresentationModel(variant.cdr3_only_mlm_only()),
-    # CachedRepresentationModel(variant.classic()),
-    # CachedRepresentationModel(variant.olga()),
-    # CachedRepresentationModel(variant.average_pooling()),
-    # CachedRepresentationModel(variant.unpaired()),
-    # CachedRepresentationModel(variant.dropout_noise_only()),
+    CachedRepresentationModel(variant.cdr3_only()),
+    CachedRepresentationModel(variant.mlm_only()),
+    CachedRepresentationModel(variant.cdr3_only_mlm_only()),
+    CachedRepresentationModel(variant.classic()),
+    CachedRepresentationModel(variant.olga()),
+    CachedRepresentationModel(variant.average_pooling()),
+    CachedRepresentationModel(variant.unpaired()),
+    CachedRepresentationModel(variant.dropout_noise_only()),
     CachedRepresentationModel(TcrBert()),
     CachedRepresentationModel(ProtBert()),
     CachedRepresentationModel(Esm2()),
@@ -65,7 +65,7 @@ def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
         **get_one_vs_rest_one_shot_results(model),
         **get_one_vs_rest_few_shot_results(model),
-        **get_one_in_many_results(model)
+        # **get_one_in_many_results(model)
     }
 
 

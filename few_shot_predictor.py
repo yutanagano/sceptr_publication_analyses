@@ -1,9 +1,15 @@
 import numpy as np
 from numpy import ndarray
+import pandas as pd
 from pandas import DataFrame
+from paths import DATA_DIR
 from pyrepseq.metric.tcr_metric import TcrMetric
-from sklearn.svm import SVC
+from sklearn.svm import LinearSVC
 import utils
+
+
+BAKCGROUND_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"tanno"/"test.csv")
+bg_sample = BAKCGROUND_DATA.sample(n=1000, random_state=420)
 
 
 class FewShotOneVsRestPredictor:
@@ -17,6 +23,23 @@ class FewShotOneVsRestPredictor:
     def get_avg_dist_inferences(self) -> ndarray:
         avg_dists = np.mean(self._cdist_matrix, axis=1)
         return utils.convert_dists_to_scores(avg_dists)
+
+
+class FewShotSVCPredictor:
+    def __init__(self, model, positive_refs: DataFrame, queries: DataFrame) -> None:
+        svc = LinearSVC(class_weight="balanced", dual=False)
+
+        positive_reps = model.calc_vector_representations(positive_refs)
+        bg_reps = model.calc_vector_representations(bg_sample)
+        training_reps = np.concatenate([positive_reps, bg_reps], axis=0)
+        ground_truth = np.array([1] * len(positive_refs) + [0] * len(bg_sample))
+        svc.fit(training_reps, ground_truth)
+
+        query_reps = model.calc_vector_representations(queries)
+        self._scores = svc.decision_function(query_reps)
+    
+    def get_inferences(self) -> ndarray:
+        return self._scores
 
 
 class FewShotOneInManyPredictor:

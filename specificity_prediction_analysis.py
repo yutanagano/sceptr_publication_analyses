@@ -1,6 +1,6 @@
 from collections import defaultdict
 from datetime import datetime
-from few_shot_predictor import FewShotOneVsRestPredictor, FewShotOneInManyPredictor
+from few_shot_predictor import FewShotOneVsRestPredictor, FewShotOneInManyPredictor, FewShotSVCPredictor
 from itertools import chain
 import logging
 import numpy as np
@@ -15,7 +15,7 @@ from sceptr import variant
 from sklearn import metrics
 from hugging_face_lms import TcrBert, ProtBert, Esm2
 from tqdm import tqdm
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Tuple
 import utils
 
 
@@ -27,18 +27,18 @@ LABELLED_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"vdjdb_cleane
 EPITOPES = LABELLED_DATA.Epitope.unique()
 
 MODELS = (
-    tcr_metric.Cdr3Levenshtein(),
+    # tcr_metric.Cdr3Levenshtein(),
     # tcr_metric.CdrLevenshtein(),
-    tcr_metric.Tcrdist(),
-    CachedRepresentationModel(variant.default()),
-    CachedRepresentationModel(variant.cdr3_only()),
-    CachedRepresentationModel(variant.mlm_only()),
-    CachedRepresentationModel(variant.cdr3_only_mlm_only()),
-    CachedRepresentationModel(variant.classic()),
-    CachedRepresentationModel(variant.olga()),
-    CachedRepresentationModel(variant.average_pooling()),
-    CachedRepresentationModel(variant.unpaired()),
-    CachedRepresentationModel(variant.dropout_noise_only()),
+    # tcr_metric.Tcrdist(),
+    # CachedRepresentationModel(variant.default()),
+    # CachedRepresentationModel(variant.cdr3_only()),
+    # CachedRepresentationModel(variant.mlm_only()),
+    # CachedRepresentationModel(variant.cdr3_only_mlm_only()),
+    # CachedRepresentationModel(variant.classic()),
+    # CachedRepresentationModel(variant.olga()),
+    # CachedRepresentationModel(variant.average_pooling()),
+    # CachedRepresentationModel(variant.unpaired()),
+    # CachedRepresentationModel(variant.dropout_noise_only()),
     CachedRepresentationModel(TcrBert()),
     CachedRepresentationModel(ProtBert()),
     CachedRepresentationModel(Esm2()),
@@ -63,9 +63,10 @@ def main() -> None:
 
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
-        **get_one_vs_rest_one_shot_results(model),
-        **get_one_vs_rest_few_shot_results(model),
+        # **get_one_vs_rest_one_shot_results(model),
+        # **get_one_vs_rest_few_shot_results(model),
         # **get_one_in_many_results(model)
+        **get_ovr_svc_results(model)
     }
 
 
@@ -222,6 +223,61 @@ def get_one_in_many_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFr
         f"one_in_many_{k}_shot_nn": DataFrame.from_records(list(chain.from_iterable(nn_summaries))),
         f"one_in_many_{k}_shot_avg_dist": DataFrame.from_records(list(chain.from_iterable(avg_dist_summaries)))
     }
+
+
+def get_ovr_svc_results(model) -> Dict[str, DataFrame]:
+    if "Levenshtein" in model.name or "dist" in model.name:
+        print(f"Skipping OVRSVC for {model.name}.")
+        return dict()
+
+    results = dict()
+    for num_shots in (1, *NUM_SHOTS):
+        filename, df = get_ovr_svc_k_shot_results(model, k=num_shots)
+        results[filename] = df
+    return results
+
+
+def get_ovr_svc_k_shot_results(model, k: int) -> Tuple[str, DataFrame]:
+    print(f"Commencing OVRSVC[{k}-shot] for {model.name}...")
+
+    results = []
+    
+    for epitope in tqdm(EPITOPES):
+        labelled_data_epitope_mask = LABELLED_DATA.Epitope == epitope
+        epitope_references = LABELLED_DATA[labelled_data_epitope_mask]
+        ref_index_sets = epitope_references.index.to_list()
+
+        if len(epitope_references) - k < 100:
+            logging.debug(f"Not enough references for {epitope} for {k} shots, skipping")
+            continue
+
+        random.seed("tcrsarecool")
+        ref_index_sets = [
+            random.sample(ref_index_sets, k=k) for _ in range(NUM_RANDOM_FOLDS)
+        ]
+        logging.info(f"{model.name}:OVRSVC[{k}-shot]:{epitope}: {ref_index_sets[0][:2]}")
+
+        auc_summaries = get_ovr_svc_k_shot_results_for_epitope(model, epitope, ref_index_sets)
+
+        results.extend(auc_summaries)
+
+    return (f"one_vs_rest_{k}_shot_svc", DataFrame.from_records(results))
+
+
+def get_ovr_svc_k_shot_results_for_epitope(model: TcrMetric, epitope: str, ref_index_sets: Iterable[List[int]]) -> List[Dict]:
+    aucs = []
+    
+    for ref_index_set in ref_index_sets:
+        positive_refs = LABELLED_DATA.loc[ref_index_set]
+        queries = LABELLED_DATA.drop(index=ref_index_set)
+        ground_truth = queries.Epitope == epitope
+        predictor = FewShotSVCPredictor(model, positive_refs, queries)
+        
+        scores = predictor.get_inferences()
+        auc = metrics.roc_auc_score(ground_truth, scores)
+        aucs.append(auc)
+    
+    return generate_summary(epitope, aucs, "auc")
 
 
 def generate_summary(epitope: str, measures: Iterable[float], measure_name: str) -> List[Dict]:

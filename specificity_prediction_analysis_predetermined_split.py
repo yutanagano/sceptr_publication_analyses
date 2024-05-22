@@ -22,7 +22,7 @@ current_time = datetime.now().isoformat()
 logging.basicConfig(filename=f"log_{current_time}.txt", level=logging.INFO)
 
 
-TRAIN_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"train_valid.csv")
+TRAIN_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"train.csv")
 TEST_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"test.csv")
 
 TEST_DATA_DISCRIMINATION = TEST_DATA[TEST_DATA.Epitope.isin(TRAIN_DATA.Epitope.unique())].reset_index(drop=True)
@@ -31,7 +31,7 @@ TEST_DATA_UNSEEN_EPITOPES = TEST_DATA[TEST_DATA.Epitope.map(lambda ep: ep not in
 UNSEEN_EPITOPES = TEST_DATA_UNSEEN_EPITOPES.Epitope.unique()
 
 MODELS = (
-    tcr_metric.Cdr3Levenshtein(),
+    # tcr_metric.Cdr3Levenshtein(),
     # tcr_metric.CdrLevenshtein(),
     tcr_metric.Tcrdist(),
     CachedRepresentationModel(variant.default()),
@@ -44,9 +44,9 @@ MODELS = (
     # CachedRepresentationModel(variant.average_pooling()),
     # CachedRepresentationModel(variant.unpaired()),
     # CachedRepresentationModel(variant.dropout_noise_only()),
-    CachedRepresentationModel(TcrBert()),
-    CachedRepresentationModel(ProtBert()),
-    CachedRepresentationModel(Esm2()),
+    # CachedRepresentationModel(TcrBert()),
+    # CachedRepresentationModel(ProtBert()),
+    # CachedRepresentationModel(Esm2()),
 )
 
 NUM_SHOTS = (2, 5, 10, 20, 50, 100, 200)
@@ -69,10 +69,10 @@ def main() -> None:
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
         **get_discrimination_results(model),
-        **get_discrimination_avg_rank(model),
-        **get_detection_results(model),
-        # **get_one_vs_rest_one_shot_unseen_results(model),
-        # **get_one_vs_rest_few_shot_unseen_results(model)
+        # **get_discrimination_avg_rank(model),
+        # **get_detection_results(model),
+        **get_one_vs_rest_one_shot_unseen_results(model),
+        **get_one_vs_rest_few_shot_unseen_results(model)
     }
 
 
@@ -195,7 +195,7 @@ def get_one_vs_rest_one_shot_unseen_results(model: TcrMetric) -> Dict[str, DataF
         auc_summary = generate_summary(epitope, aucs, "auc")
         results.extend(auc_summary)
     
-    return {"one_vs_rest_unseen_epitopes_1_shot": DataFrame.from_records(results)}
+    return {"ovr_unseen_epitopes_1_shot": DataFrame.from_records(results)}
 
 
 def get_one_vs_rest_few_shot_unseen_results(model: TcrMetric) -> Dict[str, DataFrame]:
@@ -233,8 +233,8 @@ def get_one_vs_rest_k_shot_unseen_results(model: TcrMetric, k: int) -> Dict[str,
         avg_dist_results.extend(auc_summaries["avg_dist"])
 
     return {
-        f"one_vs_rest_unseen_epitopes_{k}_shot_nn": DataFrame.from_records(nn_results),
-        f"one_vs_rest_unseen_epitopes_{k}_shot_avg_dist": DataFrame.from_records(avg_dist_results),
+        f"ovr_unseen_epitopes_nn_{k}_shot": DataFrame.from_records(nn_results),
+        f"ovr_unseen_epitopes_avg_dist_{k}_shot": DataFrame.from_records(avg_dist_results),
     }
 
 

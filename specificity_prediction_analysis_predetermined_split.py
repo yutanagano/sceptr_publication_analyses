@@ -71,8 +71,8 @@ def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
         **get_discrimination_results(model),
         # **get_discrimination_avg_rank(model),
         # **get_detection_results(model),
-        **get_one_vs_rest_one_shot_unseen_results(model),
-        **get_one_vs_rest_few_shot_unseen_results(model)
+        # **get_one_vs_rest_one_shot_unseen_results(model),
+        # **get_one_vs_rest_few_shot_unseen_results(model)
     }
 
 

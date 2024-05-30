@@ -8,7 +8,7 @@ from sklearn.svm import LinearSVC
 import utils
 
 
-BAKCGROUND_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"tanno"/"test.csv").dropna(subset=["TRAV","TRAJ","CDR3A","TRBV","TRBJ","CDR3B"])
+BAKCGROUND_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"tanno"/"train.csv").dropna(subset=["TRAV","TRAJ","CDR3A","TRBV","TRBJ","CDR3B"])
 bg_sample = BAKCGROUND_DATA.sample(n=1000, random_state=420)
 
 
@@ -27,7 +27,7 @@ class FewShotOneVsRestPredictor:
 
 class FewShotSVCPredictor:
     def __init__(self, model, positive_refs: DataFrame, queries: DataFrame) -> None:
-        svc = LinearSVC(class_weight="balanced", dual="auto")
+        svc = LinearSVC(class_weight="balanced", dual="auto", max_iter=100_000)
 
         positive_reps = model.calc_vector_representations(positive_refs)
         bg_reps = model.calc_vector_representations(bg_sample)

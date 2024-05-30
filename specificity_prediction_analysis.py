@@ -30,7 +30,7 @@ MODELS = (
     # tcr_metric.Cdr3Levenshtein(),
     # tcr_metric.CdrLevenshtein(),
     # tcr_metric.Tcrdist(),
-    # CachedRepresentationModel(variant.default()),
+    CachedRepresentationModel(variant.default()),
     # CachedRepresentationModel(variant.cdr3_only()),
     # CachedRepresentationModel(variant.mlm_only()),
     # CachedRepresentationModel(variant.cdr3_only_mlm_only()),
@@ -245,23 +245,26 @@ def get_ovr_svc_k_shot_results(model, k: int) -> Tuple[str, DataFrame]:
     for epitope in tqdm(EPITOPES):
         labelled_data_epitope_mask = LABELLED_DATA.Epitope == epitope
         epitope_references = LABELLED_DATA[labelled_data_epitope_mask]
-        ref_index_sets = epitope_references.index.to_list()
+        ref_indices = epitope_references.index.to_list()
 
         if len(epitope_references) - k < 100:
             logging.debug(f"Not enough references for {epitope} for {k} shots, skipping")
             continue
-
-        random.seed("tcrsarecool")
-        ref_index_sets = [
-            random.sample(ref_index_sets, k=k) for _ in range(NUM_RANDOM_FOLDS)
-        ]
+        
+        if k == 1:
+            ref_index_sets = [[idx] for idx in ref_indices]
+        else:
+            random.seed("tcrsarecool")
+            ref_index_sets = [
+                random.sample(ref_indices, k=k) for _ in range(NUM_RANDOM_FOLDS)
+            ]
         logging.info(f"{model.name}:OVRSVC[{k}-shot]:{epitope}: {ref_index_sets[0][:2]}")
 
         auc_summaries = get_ovr_svc_k_shot_results_for_epitope(model, epitope, ref_index_sets)
 
         results.extend(auc_summaries)
 
-    return (f"one_vs_rest_{k}_shot_svc", DataFrame.from_records(results))
+    return (f"ovr_svc_{k}_shot", DataFrame.from_records(results))
 
 
 def get_ovr_svc_k_shot_results_for_epitope(model: TcrMetric, epitope: str, ref_index_sets: Iterable[List[int]]) -> List[Dict]:

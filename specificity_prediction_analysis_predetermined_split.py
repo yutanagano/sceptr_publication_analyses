@@ -1,10 +1,9 @@
-from collections import defaultdict
 from datetime import datetime
-from few_shot_predictor import FewShotOneVsRestPredictor, FewShotOneInManyPredictor
+from few_shot_predictor import FewShotOneVsRestPredictor
 import logging
 import numpy as np
 import pandas as pd
-from pandas import DataFrame, Series
+from pandas import DataFrame
 from paths import DATA_DIR, RESULTS_DIR
 from cached_representation_model import CachedRepresentationModel
 from pyrepseq.metric import tcr_metric
@@ -12,7 +11,7 @@ from pyrepseq.metric.tcr_metric import TcrMetric
 import random
 from sceptr import variant
 from sklearn import metrics
-from hugging_face_lms import TcrBert, ProtBert, Esm2
+from hugging_face_lms import TcrBert
 from tqdm import tqdm
 from typing import Dict, Iterable, List
 import utils
@@ -32,21 +31,10 @@ UNSEEN_EPITOPES = TEST_DATA_UNSEEN_EPITOPES.Epitope.unique()
 
 MODELS = (
     # tcr_metric.Cdr3Levenshtein(),
-    # tcr_metric.CdrLevenshtein(),
-    tcr_metric.Tcrdist(),
+    # tcr_metric.Tcrdist(),
     CachedRepresentationModel(variant.default()),
-    CachedRepresentationModel(variant.finetuned()),
-    # CachedRepresentationModel(variant.cdr3_only()),
-    # CachedRepresentationModel(variant.mlm_only()),
-    # CachedRepresentationModel(variant.cdr3_only_mlm_only()),
-    # CachedRepresentationModel(variant.classic()),
-    # CachedRepresentationModel(variant.olga()),
-    # CachedRepresentationModel(variant.average_pooling()),
-    # CachedRepresentationModel(variant.unpaired()),
-    # CachedRepresentationModel(variant.dropout_noise_only()),
+    # CachedRepresentationModel(variant.finetuned()),
     # CachedRepresentationModel(TcrBert()),
-    # CachedRepresentationModel(ProtBert()),
-    # CachedRepresentationModel(Esm2()),
 )
 
 NUM_SHOTS = (2, 5, 10, 20, 50, 100, 200)
@@ -68,16 +56,14 @@ def main() -> None:
 
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
-        **get_discrimination_results(model),
-        # **get_discrimination_avg_rank(model),
-        # **get_detection_results(model),
-        # **get_one_vs_rest_one_shot_unseen_results(model),
-        # **get_one_vs_rest_few_shot_unseen_results(model)
+        **get_seen_pmhc_results(model),
+        # **get_unseen_pmhc_one_shot_results(model),
+        # **get_unseen_pmhc_few_shot_results(model)
     }
 
 
-def get_discrimination_results(model: TcrMetric) -> Dict[str, DataFrame]:
-    print(f"Commencing discrimination (predetermined split) for {model.name}...")
+def get_seen_pmhc_results(model: TcrMetric) -> Dict[str, DataFrame]:
+    print(f"Commencing ovr (predetermined split) for {model.name}...")
 
     nn_results = []
     avg_dist_results = []
@@ -98,77 +84,12 @@ def get_discrimination_results(model: TcrMetric) -> Dict[str, DataFrame]:
         avg_dist_results.append({"epitope": epitope, "auc": avg_dist_auc})
 
     return {
-        f"discrimination_ovr_predetermined_split_nn": DataFrame.from_records(nn_results),
-        f"discrimination_ovr_predetermined_split_avg_dist": DataFrame.from_records(avg_dist_results),
+        f"ovr_predetermined_split_nn": DataFrame.from_records(nn_results),
+        f"ovr_predetermined_split_avg_dist": DataFrame.from_records(avg_dist_results),
     }
 
 
-def get_discrimination_avg_rank(model: TcrMetric) -> Dict[str, DataFrame]:
-    print(f"Commencing discrimination (avg rank, predetermined split) for {model.name}...")
-
-    predictor = FewShotOneInManyPredictor(model, TRAIN_DATA, TEST_DATA_DISCRIMINATION)
-
-    nn_scores_table = predictor.get_nn_inferences()
-    avg_dist_scores_table = predictor.get_avg_dist_inferences()
-
-    nn_avg_rank_per_epitope = get_avg_rank_per_epitope(nn_scores_table, TEST_DATA_DISCRIMINATION["Epitope"])
-    avg_dist_avg_rank_per_epitope = get_avg_rank_per_epitope(avg_dist_scores_table, TEST_DATA_DISCRIMINATION["Epitope"])
-
-    nn_df = DataFrame.from_records([
-        {"epitope": epitope, "avg_rank": avg_rank} for epitope, avg_rank in nn_avg_rank_per_epitope.items()
-    ])
-    avg_dist_df = DataFrame.from_records([
-        {"epitope": epitope, "avg_rank": avg_rank} for epitope, avg_rank in avg_dist_avg_rank_per_epitope.items()
-    ])
-
-    return {
-        f"discrimination_oim_predetermined_split_nn": nn_df,
-        f"discrimination_oim_predetermined_split_avg_dist": avg_dist_df
-    }
-
-
-def get_avg_rank_per_epitope(scores: DataFrame, true_labels: Series) -> Dict[str, float]:
-    scores = scores.reset_index(drop=True)
-    true_labels = true_labels.reset_index(drop=True)
-
-    rank_of_true_label = scores.apply(
-        lambda row: row.sort_values(ascending=False).index.get_loc(true_labels.loc[row.name]) + 1,
-        axis=1
-    )
-
-    labels_and_ranks = DataFrame.from_dict({"true_label": true_labels, "rank": rank_of_true_label})
-    avg_rank_per_epitope = labels_and_ranks.groupby("true_label").aggregate("mean")["rank"]
-    return avg_rank_per_epitope.to_dict()
-
-
-def get_detection_results(model: TcrMetric) -> Dict[str, DataFrame]:
-    print(f"Commencing detection (predetermined split) for {model.name}...")
-
-    nn_results = []
-    avg_dist_results = []
-
-    train_data_grouped_by_epitope = TRAIN_DATA.groupby("Epitope")
-    for epitope, tcr_indices in train_data_grouped_by_epitope.groups.items():
-        epitope_references = TRAIN_DATA.loc[tcr_indices]
-        ground_truth = TEST_DATA.Epitope == epitope
-        predictor = FewShotOneVsRestPredictor(model, positive_refs=epitope_references, queries=TEST_DATA)
-
-        nn_scores = predictor.get_nn_inferences()
-        avg_dist_scores = predictor.get_avg_dist_inferences()
-
-        nn_auc = metrics.roc_auc_score(ground_truth, nn_scores)
-        avg_dist_auc = metrics.roc_auc_score(ground_truth, avg_dist_scores)
-
-        nn_results.append({"epitope": epitope, "auc": nn_auc})
-        avg_dist_results.append({"epitope": epitope, "auc": avg_dist_auc})
-
-    return {
-        f"detection_predetermined_split_nn": DataFrame.from_records(nn_results),
-        f"detection_predetermined_split_avg_dist": DataFrame.from_records(avg_dist_results),
-    }
-
-
-def get_one_vs_rest_one_shot_unseen_results(model: TcrMetric) -> Dict[str, DataFrame]:
+def get_unseen_pmhc_one_shot_results(model: TcrMetric) -> Dict[str, DataFrame]:
     print(f"Commencing OVR[1-shot] (unseen epitopes) for {model.name}...")
 
     results = []
@@ -198,15 +119,15 @@ def get_one_vs_rest_one_shot_unseen_results(model: TcrMetric) -> Dict[str, DataF
     return {"ovr_unseen_epitopes_1_shot": DataFrame.from_records(results)}
 
 
-def get_one_vs_rest_few_shot_unseen_results(model: TcrMetric) -> Dict[str, DataFrame]:
+def get_unseen_pmhc_few_shot_results(model: TcrMetric) -> Dict[str, DataFrame]:
     results = dict()
     for num_shots in NUM_SHOTS:
-        k_shot_results = get_one_vs_rest_k_shot_unseen_results(model, k=num_shots)
+        k_shot_results = get_unseen_pmhc_k_shot_results(model, k=num_shots)
         results.update(k_shot_results)
     return results
 
 
-def get_one_vs_rest_k_shot_unseen_results(model: TcrMetric, k: int) -> Dict[str, DataFrame]:
+def get_unseen_pmhc_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFrame]:
     print(f"Commencing OVR[{k}-shot] for {model.name}...")
 
     nn_results = []
@@ -227,7 +148,7 @@ def get_one_vs_rest_k_shot_unseen_results(model: TcrMetric, k: int) -> Dict[str,
         ]
         logging.info(f"{model.name}:OVR[{k}-shot]:{epitope}: {ref_index_sets[0][:2]}")
 
-        auc_summaries = get_one_vs_rest_k_shot_auc_summaries_for_epitope(model, epitope, ref_index_sets)
+        auc_summaries = get_unseen_pmhc_k_shot_auc_summaries_for_epitope(model, epitope, ref_index_sets)
 
         nn_results.extend(auc_summaries["nn"])
         avg_dist_results.extend(auc_summaries["avg_dist"])
@@ -238,7 +159,7 @@ def get_one_vs_rest_k_shot_unseen_results(model: TcrMetric, k: int) -> Dict[str,
     }
 
 
-def get_one_vs_rest_k_shot_auc_summaries_for_epitope(model: TcrMetric, epitope: str, ref_index_sets: Iterable[List[int]]) -> Dict[str, List[Dict]]:
+def get_unseen_pmhc_k_shot_auc_summaries_for_epitope(model: TcrMetric, epitope: str, ref_index_sets: Iterable[List[int]]) -> Dict[str, List[Dict]]:
     nn_aucs = []
     avg_dist_aucs = []
     

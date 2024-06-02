@@ -40,32 +40,3 @@ class FewShotSVCPredictor:
     
     def get_inferences(self) -> ndarray:
         return self._scores
-
-
-class FewShotOneInManyPredictor:
-    def __init__(self, metric: TcrMetric, positive_refs: DataFrame, queries: DataFrame) -> None:
-        self._cdist_matrices = dict()
-
-        grouped_by_epitope = positive_refs.groupby("Epitope")
-        for epitope in grouped_by_epitope.groups:
-            epitope_refs = grouped_by_epitope.get_group(epitope)
-            cdist_matrix = metric.calc_cdist_matrix(queries, epitope_refs)
-            self._cdist_matrices[epitope] = cdist_matrix
-    
-    def get_nn_inferences(self) -> DataFrame:
-        nn_dists = dict()
-        
-        for epitope, cdist_matrix in self._cdist_matrices.items():
-            nn_dists[epitope] = np.min(cdist_matrix, axis=1)
-
-        nn_dists = DataFrame.from_dict(nn_dists)
-        return utils.convert_dists_to_scores(nn_dists)
-    
-    def get_avg_dist_inferences(self) -> DataFrame:
-        avg_dists = dict()
-
-        for epitope, cdist_matrix in self._cdist_matrices.items():
-            avg_dists[epitope] = np.mean(cdist_matrix, axis=1)
-        
-        avg_dists = DataFrame.from_dict(avg_dists)
-        return utils.convert_dists_to_scores(avg_dists)

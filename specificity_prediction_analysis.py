@@ -1,11 +1,9 @@
-from collections import defaultdict
 from datetime import datetime
-from few_shot_predictor import FewShotOneVsRestPredictor, FewShotOneInManyPredictor, FewShotSVCPredictor
-from itertools import chain
+from few_shot_predictor import FewShotOneVsRestPredictor, FewShotSVCPredictor
 import logging
 import numpy as np
 import pandas as pd
-from pandas import DataFrame, Series
+from pandas import DataFrame
 from paths import DATA_DIR, RESULTS_DIR
 from cached_representation_model import CachedRepresentationModel
 from pyrepseq.metric import tcr_metric
@@ -31,17 +29,17 @@ MODELS = (
     # tcr_metric.CdrLevenshtein(),
     # tcr_metric.Tcrdist(),
     CachedRepresentationModel(variant.default()),
-    # CachedRepresentationModel(variant.cdr3_only()),
     # CachedRepresentationModel(variant.mlm_only()),
-    # CachedRepresentationModel(variant.cdr3_only_mlm_only()),
-    # CachedRepresentationModel(variant.classic()),
-    # CachedRepresentationModel(variant.olga()),
     # CachedRepresentationModel(variant.average_pooling()),
-    # CachedRepresentationModel(variant.unpaired()),
+    # CachedRepresentationModel(variant.synthetic_data()),
+    # CachedRepresentationModel(variant.shuffled_data()),
+    # CachedRepresentationModel(variant.cdr3_only()),
+    # CachedRepresentationModel(variant.cdr3_only_mlm_only()),
+    # CachedRepresentationModel(variant.left_aligned()),
     # CachedRepresentationModel(variant.dropout_noise_only()),
-    CachedRepresentationModel(TcrBert()),
-    CachedRepresentationModel(ProtBert()),
-    CachedRepresentationModel(Esm2()),
+    # CachedRepresentationModel(TcrBert()),
+    # CachedRepresentationModel(ProtBert()),
+    # CachedRepresentationModel(Esm2()),
 )
 
 NUM_SHOTS = (2, 5, 10, 20, 50, 100, 200)
@@ -63,14 +61,13 @@ def main() -> None:
 
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
-        # **get_one_vs_rest_one_shot_results(model),
-        # **get_one_vs_rest_few_shot_results(model),
-        # **get_one_in_many_results(model)
-        **get_ovr_svc_results(model)
+        # **get_distance_based_one_shot_results(model),
+        **get_distance_based_few_shot_results(model),
+        # **get_support_vector_machine_results(model)
     }
 
 
-def get_one_vs_rest_one_shot_results(model: TcrMetric) -> Dict[str, DataFrame]:
+def get_distance_based_one_shot_results(model: TcrMetric) -> Dict[str, DataFrame]:
     print(f"Commencing OVR[1-shot] for {model.name}...")
 
     results = []
@@ -97,18 +94,18 @@ def get_one_vs_rest_one_shot_results(model: TcrMetric) -> Dict[str, DataFrame]:
         auc_summary = generate_summary(epitope, aucs, "auc")
         results.extend(auc_summary)
     
-    return {"one_vs_rest_1_shot": DataFrame.from_records(results)}
+    return {"ovr_1_shot": DataFrame.from_records(results)}
 
 
-def get_one_vs_rest_few_shot_results(model: TcrMetric) -> Dict[str, DataFrame]:
+def get_distance_based_few_shot_results(model: TcrMetric) -> Dict[str, DataFrame]:
     results = dict()
     for num_shots in NUM_SHOTS:
-        k_shot_results = get_one_vs_rest_k_shot_results(model, k=num_shots)
+        k_shot_results = get_distance_based_k_shot_results(model, k=num_shots)
         results.update(k_shot_results)
     return results
 
 
-def get_one_vs_rest_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFrame]:
+def get_distance_based_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFrame]:
     print(f"Commencing OVR[{k}-shot] for {model.name}...")
 
     nn_results = []
@@ -129,18 +126,18 @@ def get_one_vs_rest_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFr
         ]
         logging.info(f"{model.name}:OVR[{k}-shot]:{epitope}: {ref_index_sets[0][:2]}")
 
-        auc_summaries = get_one_vs_rest_k_shot_auc_summaries_for_epitope(model, epitope, ref_index_sets)
+        auc_summaries = get_distance_based_k_shot_auc_summaries_for_epitope(model, epitope, ref_index_sets)
 
         nn_results.extend(auc_summaries["nn"])
         avg_dist_results.extend(auc_summaries["avg_dist"])
 
     return {
-        f"one_vs_rest_{k}_shot_nn": DataFrame.from_records(nn_results),
-        f"one_vs_rest_{k}_shot_avg_dist": DataFrame.from_records(avg_dist_results),
+        f"ovr_nn_{k}_shot": DataFrame.from_records(nn_results),
+        f"ovr_avg_dist_{k}_shot": DataFrame.from_records(avg_dist_results),
     }
 
 
-def get_one_vs_rest_k_shot_auc_summaries_for_epitope(model: TcrMetric, epitope: str, ref_index_sets: Iterable[List[int]]) -> Dict[str, List[Dict]]:
+def get_distance_based_k_shot_auc_summaries_for_epitope(model: TcrMetric, epitope: str, ref_index_sets: Iterable[List[int]]) -> Dict[str, List[Dict]]:
     nn_aucs = []
     avg_dist_aucs = []
     
@@ -165,79 +162,19 @@ def get_one_vs_rest_k_shot_auc_summaries_for_epitope(model: TcrMetric, epitope: 
     }
 
 
-def get_one_in_many_results(model: TcrMetric) -> Dict[str, DataFrame]:
-    results = dict()
-    for num_shots in NUM_SHOTS:
-        k_shot_results = get_one_in_many_k_shot_results(model, k=num_shots)
-        results.update(k_shot_results)
-    return results
-
-
-def get_one_in_many_k_shot_results(model: TcrMetric, k: int) -> Dict[str, DataFrame]:
-    print(f"Commencing OIM[{k}-shot] for {model.name}...")
-
-    nn_avg_ranks = defaultdict(list)
-    avg_dist_avg_ranks = defaultdict(list)
-
-    labelled_data_with_large_enough_epitope_groups = LABELLED_DATA.groupby("Epitope").filter(lambda group: len(group) - k >= 100)
-    labelled_data_grouped_by_epitope = labelled_data_with_large_enough_epitope_groups.groupby("Epitope")
-
-    for random_seed in tqdm(range(NUM_RANDOM_FOLDS)):
-        positive_refs = labelled_data_grouped_by_epitope.sample(n=k, replace=False, random_state=random_seed)
-        queries = labelled_data_with_large_enough_epitope_groups[
-            ~labelled_data_with_large_enough_epitope_groups.index.isin(positive_refs.index)
-        ]
-        assert len(set(positive_refs.index).intersection(set(queries.index))) == 0
-
-        if random_seed == 0:
-            log_sample_indices(positive_refs, k, model)
-
-            positive_refs_summary = positive_refs.groupby("Epitope").size()
-            queries_summary = queries.groupby("Epitope").size()
-
-            logging.info(f"\n{positive_refs_summary}")
-            logging.info(f"\n{queries_summary}")
-
-        predictor = FewShotOneInManyPredictor(model, positive_refs, queries)
-
-        nn_scores_table = predictor.get_nn_inferences()
-        avg_dist_scores_table = predictor.get_avg_dist_inferences()
-
-        nn_avg_rank_per_epitope = get_avg_rank_per_epitope(nn_scores_table, queries["Epitope"])
-        avg_dist_avg_rank_per_epitope = get_avg_rank_per_epitope(avg_dist_scores_table, queries["Epitope"])
-
-        for epitope, avg_rank in nn_avg_rank_per_epitope.items():
-            nn_avg_ranks[epitope].append(avg_rank)
-        
-        for epitope, avg_rank in avg_dist_avg_rank_per_epitope.items():
-            avg_dist_avg_ranks[epitope].append(avg_rank)
-    
-    nn_summaries = [
-        generate_summary(epitope, avg_ranks, "avg_rank") for epitope, avg_ranks in nn_avg_ranks.items()
-    ]
-    avg_dist_summaries = [
-        generate_summary(epitope, avg_ranks, "avg_rank") for epitope, avg_ranks in avg_dist_avg_ranks.items()
-    ]
-
-    return {
-        f"one_in_many_{k}_shot_nn": DataFrame.from_records(list(chain.from_iterable(nn_summaries))),
-        f"one_in_many_{k}_shot_avg_dist": DataFrame.from_records(list(chain.from_iterable(avg_dist_summaries)))
-    }
-
-
-def get_ovr_svc_results(model) -> Dict[str, DataFrame]:
+def get_support_vector_machine_results(model) -> Dict[str, DataFrame]:
     if "Levenshtein" in model.name or "dist" in model.name:
         print(f"Skipping OVRSVC for {model.name}.")
         return dict()
 
     results = dict()
     for num_shots in (1, *NUM_SHOTS):
-        filename, df = get_ovr_svc_k_shot_results(model, k=num_shots)
+        filename, df = get_support_vector_machine_k_shot_results(model, k=num_shots)
         results[filename] = df
     return results
 
 
-def get_ovr_svc_k_shot_results(model, k: int) -> Tuple[str, DataFrame]:
+def get_support_vector_machine_k_shot_results(model, k: int) -> Tuple[str, DataFrame]:
     print(f"Commencing OVRSVC[{k}-shot] for {model.name}...")
 
     results = []
@@ -260,14 +197,14 @@ def get_ovr_svc_k_shot_results(model, k: int) -> Tuple[str, DataFrame]:
             ]
         logging.info(f"{model.name}:OVRSVC[{k}-shot]:{epitope}: {ref_index_sets[0][:2]}")
 
-        auc_summaries = get_ovr_svc_k_shot_results_for_epitope(model, epitope, ref_index_sets)
+        auc_summaries = get_support_vector_machine_k_shot_results_for_epitope(model, epitope, ref_index_sets)
 
         results.extend(auc_summaries)
 
     return (f"ovr_svc_{k}_shot", DataFrame.from_records(results))
 
 
-def get_ovr_svc_k_shot_results_for_epitope(model: TcrMetric, epitope: str, ref_index_sets: Iterable[List[int]]) -> List[Dict]:
+def get_support_vector_machine_k_shot_results_for_epitope(model: TcrMetric, epitope: str, ref_index_sets: Iterable[List[int]]) -> List[Dict]:
     aucs = []
     
     for ref_index_set in ref_index_sets:
@@ -288,26 +225,6 @@ def generate_summary(epitope: str, measures: Iterable[float], measure_name: str)
         {"epitope": epitope, "split": idx, measure_name: measure} for idx, measure in enumerate(measures)
     ]
     return records
-
-
-def get_avg_rank_per_epitope(scores: DataFrame, true_labels: Series) -> Dict[str, float]:
-    scores = scores.reset_index(drop=True)
-    true_labels = true_labels.reset_index(drop=True)
-
-    rank_of_true_label = scores.apply(
-        lambda row: row.sort_values(ascending=False).index.get_loc(true_labels.loc[row.name]) + 1,
-        axis=1
-    )
-
-    labels_and_ranks = DataFrame.from_dict({"true_label": true_labels, "rank": rank_of_true_label})
-    avg_rank_per_epitope = labels_and_ranks.groupby("true_label").aggregate("mean")["rank"]
-    return avg_rank_per_epitope.to_dict()
-
-
-def log_sample_indices(df: DataFrame, k: int, model: TcrMetric) -> None:
-    grouped_by_epitope = df.groupby("Epitope")
-    for epitope, indices in grouped_by_epitope.groups.items():
-        logging.info(f"{model.name}:OIM[{k}-shot]:{epitope}: {indices[:2].to_list()}")
 
 
 def save_results(model_name: str, results: Dict[str, DataFrame]) -> None:

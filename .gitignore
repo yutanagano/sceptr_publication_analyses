@@ -5,5 +5,6 @@
 /analysis_results
 *.svg
 *.pdf
+*.tex
 __pycache__
 log*.txt

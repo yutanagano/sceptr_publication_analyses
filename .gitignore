@@ -1,4 +1,5 @@
 /ignore
+/.ropeproject
 /.venv
 /.representation_cache
 /tcr_data

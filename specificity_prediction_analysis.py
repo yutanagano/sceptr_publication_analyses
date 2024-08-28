@@ -28,14 +28,14 @@ MODELS = (
     # tcr_metric.Cdr3Levenshtein(),
     # tcr_metric.CdrLevenshtein(),
     # tcr_metric.Tcrdist(),
-    # CachedRepresentationModel(variant.default()),
+    CachedRepresentationModel(variant.default()),
     # CachedRepresentationModel(variant.mlm_only()),
     # CachedRepresentationModel(variant.average_pooling()),
     # CachedRepresentationModel(variant.synthetic_data()),
     # CachedRepresentationModel(variant.shuffled_data()),
     # CachedRepresentationModel(variant.cdr3_only()),
     # CachedRepresentationModel(variant.cdr3_only_mlm_only()),
-    CachedRepresentationModel(variant.left_aligned()),
+    # CachedRepresentationModel(variant.left_aligned()),
     # CachedRepresentationModel(variant.dropout_noise_only()),
     # CachedRepresentationModel(TcrBert()),
     # CachedRepresentationModel(ProtBert()),
@@ -62,7 +62,7 @@ def main() -> None:
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
         **get_distance_based_one_shot_results(model),
-        **get_distance_based_few_shot_results(model),
+        # **get_distance_based_few_shot_results(model),
         # **get_support_vector_machine_results(model)
     }
 
@@ -231,8 +231,8 @@ def save_results(model_name: str, results: Dict[str, DataFrame]) -> None:
     model_dir = RESULTS_DIR/model_name
     model_dir.mkdir(exist_ok=True)
     
-    # for benchmark_type, results_table in results.items():
-    #     results_table.to_csv(model_dir/f"{benchmark_type}.csv", index=False)
+    for benchmark_type, results_table in results.items():
+        results_table.to_csv(model_dir/f"{benchmark_type}.csv", index=False)
 
 
 if __name__ == "__main__":

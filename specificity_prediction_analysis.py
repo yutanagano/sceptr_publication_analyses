@@ -25,21 +25,21 @@ LABELLED_DATA = pd.read_csv(DATA_DIR/"preprocessed"/"benchmarking"/"vdjdb_cleane
 EPITOPES = LABELLED_DATA.Epitope.unique()
 
 MODELS = (
-    # tcr_metric.Cdr3Levenshtein(),
-    # tcr_metric.CdrLevenshtein(),
-    # tcr_metric.Tcrdist(),
+    tcr_metric.Cdr3Levenshtein(),
+    tcr_metric.CdrLevenshtein(),
+    tcr_metric.Tcrdist(),
     CachedRepresentationModel(variant.default()),
-    # CachedRepresentationModel(variant.mlm_only()),
-    # CachedRepresentationModel(variant.average_pooling()),
-    # CachedRepresentationModel(variant.synthetic_data()),
-    # CachedRepresentationModel(variant.shuffled_data()),
-    # CachedRepresentationModel(variant.cdr3_only()),
-    # CachedRepresentationModel(variant.cdr3_only_mlm_only()),
-    # CachedRepresentationModel(variant.left_aligned()),
-    # CachedRepresentationModel(variant.dropout_noise_only()),
-    # CachedRepresentationModel(TcrBert()),
-    # CachedRepresentationModel(ProtBert()),
-    # CachedRepresentationModel(Esm2()),
+    CachedRepresentationModel(variant.mlm_only()),
+    CachedRepresentationModel(variant.average_pooling()),
+    CachedRepresentationModel(variant.synthetic_data()),
+    CachedRepresentationModel(variant.shuffled_data()),
+    CachedRepresentationModel(variant.cdr3_only()),
+    CachedRepresentationModel(variant.cdr3_only_mlm_only()),
+    CachedRepresentationModel(variant.left_aligned()),
+    CachedRepresentationModel(variant.dropout_noise_only()),
+    CachedRepresentationModel(TcrBert()),
+    CachedRepresentationModel(ProtBert()),
+    CachedRepresentationModel(Esm2()),
 )
 
 NUM_SHOTS = (2, 5, 10, 20, 50, 100, 200)
@@ -62,8 +62,8 @@ def main() -> None:
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
         **get_distance_based_one_shot_results(model),
-        # **get_distance_based_few_shot_results(model),
-        # **get_support_vector_machine_results(model)
+        **get_distance_based_few_shot_results(model),
+        **get_support_vector_machine_results(model)
     }
 
 

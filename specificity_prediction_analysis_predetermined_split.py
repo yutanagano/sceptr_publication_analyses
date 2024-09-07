@@ -31,11 +31,11 @@ TEST_DATA_UNSEEN_EPITOPES = TEST_DATA[TEST_DATA.Epitope.map(lambda ep: ep not in
 UNSEEN_EPITOPES = TEST_DATA_UNSEEN_EPITOPES.Epitope.unique()
 
 MODELS = (
-    # tcr_metric.Cdr3Levenshtein(),
-    # tcr_metric.Tcrdist(),
+    tcr_metric.Cdr3Levenshtein(),
+    tcr_metric.Tcrdist(),
     CachedRepresentationModel(variant.default()),
-    # CachedRepresentationModel(variant.finetuned()),
-    # CachedRepresentationModel(TcrBert()),
+    CachedRepresentationModel(variant.finetuned()),
+    CachedRepresentationModel(TcrBert()),
 )
 
 NUM_SHOTS = (2, 5, 10, 20, 50, 100, 200)
@@ -58,8 +58,9 @@ def main() -> None:
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
         **get_seen_pmhc_results(model),
-        # **get_unseen_pmhc_one_shot_results(model),
-        # **get_unseen_pmhc_few_shot_results(model)
+        **get_seen_pmhc_results_filtered(model),
+        **get_unseen_pmhc_one_shot_results(model),
+        **get_unseen_pmhc_few_shot_results(model)
     }
 
 
@@ -87,6 +88,35 @@ def get_seen_pmhc_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
         f"ovr_predetermined_split_nn": DataFrame.from_records(nn_results),
         f"ovr_predetermined_split_avg_dist": DataFrame.from_records(avg_dist_results),
+    }
+
+
+def get_seen_pmhc_results_filtered(model: TcrMetric) -> Dict[str, DataFrame]:
+    print(f"Commencing ovr (predetermined split, filtered) for {model.name}...")
+
+    test_data_filtered = filter_for_sequence_similarity(TEST_DATA_DISCRIMINATION, TRAIN_DATA)
+
+    nn_results = []
+    avg_dist_results = []
+
+    train_data_grouped_by_epitope = TRAIN_DATA.groupby("Epitope")
+    for epitope, tcr_indices in train_data_grouped_by_epitope.groups.items():
+        epitope_references = TRAIN_DATA.loc[tcr_indices]
+        ground_truth = test_data_filtered.Epitope == epitope
+        predictor = FewShotOneVsRestPredictor(model, positive_refs=epitope_references, queries=test_data_filtered)
+
+        nn_scores = predictor.get_nn_inferences()
+        avg_dist_scores = predictor.get_avg_dist_inferences()
+
+        nn_auc = metrics.roc_auc_score(ground_truth, nn_scores)
+        avg_dist_auc = metrics.roc_auc_score(ground_truth, avg_dist_scores)
+
+        nn_results.append({"epitope": epitope, "auc": nn_auc})
+        avg_dist_results.append({"epitope": epitope, "auc": avg_dist_auc})
+
+    return {
+        f"ovr_predetermined_split_filtered_nn": DataFrame.from_records(nn_results),
+        f"ovr_predetermined_split_filtered_avg_dist": DataFrame.from_records(avg_dist_results),
     }
 
 
@@ -240,10 +270,6 @@ def filter_for_sequence_similarity(test_df: DataFrame, train_df: DataFrame) -> D
 
     # Return filtered df
     return test_df[legal_test_seq_mask]
-
-
-def foobar():
-    return 1
 
 
 if __name__ == "__main__":

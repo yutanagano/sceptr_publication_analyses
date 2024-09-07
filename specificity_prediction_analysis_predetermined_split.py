@@ -12,6 +12,7 @@ import random
 from sceptr import variant
 from sklearn import metrics
 from hugging_face_lms import TcrBert
+import tidytcells as tt
 from tqdm import tqdm
 from typing import Dict, Iterable, List
 import utils
@@ -197,6 +198,52 @@ def save_results(model_name: str, results: Dict[str, DataFrame]) -> None:
     
     for benchmark_type, results_table in results.items():
         results_table.to_csv(model_dir/f"{benchmark_type}.csv", index=False)
+
+
+def filter_for_sequence_similarity(test_df: DataFrame, train_df: DataFrame) -> DataFrame:    
+    # Get cdist
+    cdr3_levenshtein = tcr_metric.Cdr3Levenshtein()
+    cdist_matrix = cdr3_levenshtein.calc_cdist_matrix(test_df, train_df)
+
+    # Preclude TCRs with different V genes
+    test_travs = test_df.TRAV.map(lambda x: tt.tr.standardize(x, precision="gene"))
+    test_trbvs = test_df.TRBV.map(lambda x: tt.tr.standardize(x, precision="gene")) 
+    train_travs = train_df.TRAV.map(lambda x: tt.tr.standardize(x, precision="gene"))
+    train_trbvs = train_df.TRBV.map(lambda x: tt.tr.standardize(x, precision="gene")) 
+
+    same_trav = np.empty_like(cdist_matrix)
+    for i, anch_trav in enumerate(test_travs):
+        for j, comp_trav in enumerate(train_travs):
+            same_trav[i,j] = anch_trav == comp_trav
+    
+    same_trbv = np.empty_like(cdist_matrix)
+    for i, anch_trbv in enumerate(test_trbvs):
+        for j, comp_trbv in enumerate(train_trbvs):
+            same_trbv[i,j] = anch_trbv == comp_trbv
+
+    different_v_genes = 1 - (same_trav * same_trbv)
+
+    updated_cdist = cdist_matrix + 99999 * different_v_genes
+
+    # Get nearest neighbour distances
+    nn_dists = np.min(updated_cdist, axis=1)
+
+    # Calculate combined CDR3 lengths
+    combined_cdr3_length = test_df.apply(
+        lambda row: len(row.CDR3A) + len(row.CDR3B),
+        axis='columns'
+    ).to_numpy()
+
+    # Calculate sequence identity
+    seq_identity = 1 - (nn_dists/combined_cdr3_length)
+    legal_test_seq_mask = seq_identity < 0.95
+
+    # Return filtered df
+    return test_df[legal_test_seq_mask]
+
+
+def foobar():
+    return 1
 
 
 if __name__ == "__main__":

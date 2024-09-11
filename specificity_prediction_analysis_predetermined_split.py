@@ -97,7 +97,7 @@ def get_seen_pmhc_results_filtered(model: TcrMetric) -> Dict[str, DataFrame]:
     logging.info(f"Data size before filtering for similar sequences: {len(TEST_DATA_DISCRIMINATION)}")
     test_data_filtered = filter_for_sequence_similarity(TEST_DATA_DISCRIMINATION, TRAIN_DATA)
     logging.info(f"Data size after filtering for similar sequences: {len(test_data_filtered)}")
-    logging.info(f"Filtered data breakdown:\n{test_data_filtered.groupby("Epitope").size()}")
+    logging.info(f"Filtered data breakdown:\n{test_data_filtered.groupby('Epitope').size()}")
 
     nn_results = []
     avg_dist_results = []

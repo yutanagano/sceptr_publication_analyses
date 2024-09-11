@@ -1,10 +1,11 @@
 from edit_penalty import EditPenaltyCollection, EditPenaltyCollectionAnalyser
+from matplotlib.axes import Axes
 import pandas as pd
-from pandas import DataFrame
+from pandas import DataFrame, Series
 from paths import RESULTS_DIR
 import numpy as np
 from numpy import ndarray
-from typing import Optional
+from typing import Optional, Iterable
 
 
 class ModelForAnalysis:
@@ -58,3 +59,72 @@ class ModelForAnalysis:
 def convert_dists_to_scores(dists: ndarray) -> ndarray:
     max_dist = np.max(dists)
     return 1 - dists / max_dist
+
+
+def get_benchmark_summary_with_errorbars(
+    models: Iterable[ModelForAnalysis],
+    ks: Iterable[int],
+    epitopes: Iterable[str],
+):
+    mean_std_collection = []
+
+    for k in ks:
+        model_dfs = [(model.name, model.load_data(k)) for model in models]
+        summary_df = pd.DataFrame()
+        summary_df["epitope"] = model_dfs[0][1]["epitope"]
+        summary_df["split"] = model_dfs[0][1]["split"]
+
+        for model_name, model_df in model_dfs:
+            summary_df[model_name] = model_df["auc"]
+        
+        summary_df = summary_df[summary_df["epitope"].map(lambda ep: ep in epitopes)]
+
+        # get average performance across epitopes per model
+        avg_performance_df = summary_df.groupby("epitope").aggregate({model.name: "mean" for model in models})
+        avg_performances = avg_performance_df.mean()
+
+        # get error bars across epitopes per model
+        model_averages = summary_df.apply(
+            lambda row: np.mean(row.iloc[2:]),
+            axis="columns"
+        )
+
+        delta_df = summary_df.copy()
+        for model in models:
+            delta_df[model.name] = delta_df[model.name] - model_averages
+
+        variance_by_epitope = delta_df.groupby("epitope").apply(
+            lambda df: Series(data=(df[model.name].var() for model in models), index=(model.name for model in models)),
+            include_groups=False
+        )
+        stds = np.sqrt(variance_by_epitope.sum()) / len(epitopes)
+
+        # append to mean_std collection
+        mean_std_df = pd.DataFrame(data=(avg_performances, stds), index=("mean", "std"))
+        mean_std_collection.append(mean_std_df.T.stack())
+
+    return pd.DataFrame(mean_std_collection, index=ks)
+
+
+def plot_performance_curves(models: Iterable[ModelForAnalysis], ks: Iterable[int], epitopes: Iterable[str], ax: Axes):
+    benchmark_summary = get_benchmark_summary_with_errorbars(models, ks, epitopes)
+
+    for model in models:
+        mean_stds_for_model = benchmark_summary[model.name]
+        ax.errorbar(
+            x=range(len(ks)),
+            y=mean_stds_for_model["mean"],
+            yerr=mean_stds_for_model["std"],
+            fmt=model.style,
+            markersize=5,
+            c=model.colour,
+            label=model.name,
+            zorder=model.zorder,
+            capsize=5
+        )
+
+    ax.set_ylabel("Mean AUROC")
+    ax.set_xlabel("Number of Reference TCRs")
+    ax.set_xticks(range(len(ks)), ks)
+
+    return ax

@@ -94,7 +94,10 @@ def get_seen_pmhc_results(model: TcrMetric) -> Dict[str, DataFrame]:
 def get_seen_pmhc_results_filtered(model: TcrMetric) -> Dict[str, DataFrame]:
     print(f"Commencing ovr (predetermined split, filtered) for {model.name}...")
 
+    logging.info(f"Data size before filtering for similar sequences: {len(TEST_DATA_DISCRIMINATION)}")
     test_data_filtered = filter_for_sequence_similarity(TEST_DATA_DISCRIMINATION, TRAIN_DATA)
+    logging.info(f"Data size after filtering for similar sequences: {len(test_data_filtered)}")
+    logging.info(f"Filtered data breakdown:\n{test_data_filtered.groupby("Epitope").size()}")
 
     nn_results = []
     avg_dist_results = []
@@ -266,7 +269,7 @@ def filter_for_sequence_similarity(test_df: DataFrame, train_df: DataFrame) -> D
 
     # Calculate sequence identity
     seq_identity = 1 - (nn_dists/combined_cdr3_length)
-    legal_test_seq_mask = seq_identity < 0.95
+    legal_test_seq_mask = seq_identity < 0.80
 
     # Return filtered df
     return test_df[legal_test_seq_mask]

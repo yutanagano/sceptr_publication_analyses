@@ -34,34 +34,21 @@ NUM_RANDOM_FOLDS = 100
 
 def main() -> None:
     results_per_model = dict()
-    results_per_model["TCRdist"] = get_tcrdist_results()
-
-    for model in SCEPTR_VARIANTS:
-        results_per_model[model.name] = get_sceptr_results(model)
-        model.save_cache()
+    results_per_model["TCRdist (alpha only)"] = get_results(tcr_metric.AlphaTcrdist(), "a")
+    results_per_model["TCRdist (beta only)"] = get_results(tcr_metric.BetaTcrdist(), "b")
+    results_per_model["SCEPTR (alpha only)"] = get_results(CachedRepresentationModel(variant.default()), "a")
+    results_per_model["SCEPTR (beta only)"] = get_results(CachedRepresentationModel(variant.default()), "b")
+    results_per_model["SCEPTR (MLM only, alpha only)"] = get_results(CachedRepresentationModel(variant.mlm_only()), "a")
+    results_per_model["SCEPTR (MLM only, beta only)"] = get_results(CachedRepresentationModel(variant.mlm_only()), "b")
 
     for model_name, results in results_per_model.items():
         save_results(model_name, results)
     
 
-def get_tcrdist_results() -> Dict[str, DataFrame]:
-    alpha_model = tcr_metric.AlphaTcrdist()
-    beta_model = tcr_metric.BetaTcrdist()
-
+def get_results(model: TcrMetric, chain: Literal["a", "b"]) -> Dict[str, DataFrame]:
     return {
-        **get_one_shot_results(alpha_model, chain="a"),
-        **get_one_shot_results(beta_model, chain="b"),
-        **get_few_shot_results(alpha_model, chain="a"),
-        **get_few_shot_results(beta_model, chain="b")
-    }
-
-
-def get_sceptr_results(model: TcrMetric) -> Dict[str, DataFrame]:
-    return {
-        **get_one_shot_results(model, chain="a"),
-        **get_one_shot_results(model, chain="b"),
-        **get_few_shot_results(model, chain="a"),
-        **get_few_shot_results(model, chain="b")
+        **get_one_shot_results(model, chain),
+        **get_few_shot_results(model, chain)
     }
 
 

@@ -87,7 +87,7 @@ def get_one_shot_results(model: TcrMetric, chain: Literal["a", "b"]) -> Dict[str
         results.extend(auc_summary)
     
     return {
-        f"ovr_{chain}_1_shot": DataFrame.from_records(results)
+        f"ovr_1_shot": DataFrame.from_records(results)
     }
 
 
@@ -140,7 +140,7 @@ def get_distance_based_k_shot_results(model: TcrMetric, chain: Literal["a","b"],
         results.extend(generate_summary(epitope, aucs, "auc"))
 
     return {
-        f"ovr_{chain}_nn_{k}_shot": DataFrame.from_records(results),
+        f"ovr_nn_{k}_shot": DataFrame.from_records(results),
     }
 
 

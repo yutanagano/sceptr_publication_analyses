@@ -116,7 +116,7 @@ def plot_performance_curves(models: Iterable[ModelForAnalysis], ks: Iterable[int
             y=mean_stds_for_model["mean"],
             yerr=mean_stds_for_model["std"],
             fmt=model.style,
-            markersize=5,
+            # markersize=5,
             c=model.colour,
             label=model.name,
             zorder=model.zorder,

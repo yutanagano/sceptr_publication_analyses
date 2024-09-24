@@ -1,4 +1,5 @@
 from edit_penalty import EditPenaltyCollection, EditPenaltyCollectionAnalyser
+import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import pandas as pd
 from pandas import DataFrame, Series
@@ -9,8 +10,9 @@ from typing import Optional, Iterable
 
 
 class ModelForAnalysis:
-    def __init__(self, model_name: str, task_prefix: str, colour: Optional[str] = None, marker: str = "", linestyle: str = "-", zorder: Optional[float] = 1.5, ten_x: bool = False) -> None:
-        self.name = model_name
+    def __init__(self, model_name: str, task_prefix: str, colour: Optional[str] = None, marker: str = "", linestyle: str = "-", zorder: Optional[float] = 1.5, ten_x: bool = False, display_name: Optional[str] = None) -> None:
+        self.model_name = model_name
+        self.display_name = display_name
         self.task_prefix = task_prefix
         self.colour = colour
         self.marker = marker
@@ -21,6 +23,13 @@ class ModelForAnalysis:
     @property
     def style(self) -> str:
         return self.marker + self.linestyle
+
+    @property
+    def name(self) -> str:
+        if self.display_name is None:
+            return self.model_name
+
+        return self.display_name
     
     def load_data(self, k: Optional[int] = None) -> DataFrame:
         if self.task_prefix in ("ovr_nn", "ovr_avg_dist") and k == 1:
@@ -33,25 +42,25 @@ class ModelForAnalysis:
             csv_name = f"{self.task_prefix}_{k}_shot.csv"
 
         if self.ten_x:
-            path_to_csv = RESULTS_DIR/"10x"/self.name/f"{csv_name}"
+            path_to_csv = RESULTS_DIR/"10x"/self.model_name/f"{csv_name}"
         else:
-            path_to_csv = RESULTS_DIR/self.name/f"{csv_name}"
+            path_to_csv = RESULTS_DIR/self.model_name/f"{csv_name}"
         
         return pd.read_csv(path_to_csv)
     
     def load_epc_analyser(self) -> EditPenaltyCollectionAnalyser:
-        path_to_epc_state_dict = RESULTS_DIR/self.name/"epc_state_dict.pkl"
+        path_to_epc_state_dict = RESULTS_DIR/self.model_name/"epc_state_dict.pkl"
         with open(path_to_epc_state_dict, "rb") as f:
             epc = EditPenaltyCollection.from_save(f)
         return EditPenaltyCollectionAnalyser(epc)
     
     def get_num_parameters(self) -> int:
-        with open(RESULTS_DIR/self.name/"model_parameter_count.txt", "r") as f:
+        with open(RESULTS_DIR/self.model_name/"model_parameter_count.txt", "r") as f:
             count = f.read()
             return int(count)
 
     def get_model_dimensionality(self) -> int:
-        with open(RESULTS_DIR/self.name/"model_dimensionality.txt", "r") as f:
+        with open(RESULTS_DIR/self.model_name/"model_dimensionality.txt", "r") as f:
             dims = f.read()
             return int(dims)
 
@@ -128,3 +137,19 @@ def plot_performance_curves(models: Iterable[ModelForAnalysis], ks: Iterable[int
     ax.set_xticks(range(len(ks)), ks)
 
     return ax
+
+
+def get_legend_handles_labels_without_errorbars(ax: Axes):
+    handles, labels = ax.get_legend_handles_labels()
+    new_handles = [
+        plt.Line2D(
+            [0], [0],
+            color=handle[0].get_color(),
+            lw=handle[0].get_linewidth(),
+            linestyle=handle[0].get_linestyle(),
+            marker=handle[0].get_marker(),
+            markersize=handle[0].get_markersize()
+        )
+        for handle in handles
+    ]
+    return new_handles, labels

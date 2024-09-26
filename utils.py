@@ -36,6 +36,10 @@ class ModelForAnalysis:
             csv_name = f"ovr_1_shot.csv"
         elif self.task_prefix in ("ovr_unseen_epitopes_nn", "ovr_unseen_epitopes_avg_dist") and k == 1:
             csv_name = f"ovr_unseen_epitopes_1_shot.csv"
+        elif self.task_prefix == "ovr_nn_a" and k == 1:
+            csv_name = f"ovr_a_1_shot.csv"
+        elif self.task_prefix == "ovr_nn_b" and k ==1 :
+            csv_name = f"ovr_b_1_shot.csv"
         elif k is None:
             csv_name = self.task_prefix + ".csv"
         else:

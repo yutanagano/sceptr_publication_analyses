@@ -25,7 +25,7 @@ EPITOPES = LABELLED_DATA.Epitope.unique()
 
 SCEPTR_VARIANTS = (
     CachedRepresentationModel(variant.default()),
-    CachedRepresentationModel(variant.mlm_only()),
+    CachedRepresentationModel(variant.dropout_noise_only()),
 )
 
 NUM_SHOTS = (2, 5, 10, 20, 50, 100, 200)
@@ -34,12 +34,12 @@ NUM_RANDOM_FOLDS = 100
 
 def main() -> None:
     results_per_model = dict()
-    results_per_model["TCRdist (alpha only)"] = get_results(tcr_metric.AlphaTcrdist(), "a")
-    results_per_model["TCRdist (beta only)"] = get_results(tcr_metric.BetaTcrdist(), "b")
-    results_per_model["SCEPTR (alpha only)"] = get_results(CachedRepresentationModel(variant.default()), "a")
-    results_per_model["SCEPTR (beta only)"] = get_results(CachedRepresentationModel(variant.default()), "b")
-    results_per_model["SCEPTR (MLM only, alpha only)"] = get_results(CachedRepresentationModel(variant.mlm_only()), "a")
-    results_per_model["SCEPTR (MLM only, beta only)"] = get_results(CachedRepresentationModel(variant.mlm_only()), "b")
+    results_per_model["TCRdist"] = get_results(tcr_metric.AlphaTcrdist(), "a")
+    results_per_model["TCRdist"].update(get_results(tcr_metric.BetaTcrdist(), "b"))
+    results_per_model["SCEPTR"] = get_results(CachedRepresentationModel(variant.default()), "a")
+    results_per_model["SCEPTR"].update(get_results(CachedRepresentationModel(variant.default()), "b"))
+    results_per_model["SCEPTR (dropout noise only)"] = get_results(CachedRepresentationModel(variant.mlm_only()), "a")
+    results_per_model["SCEPTR (dropout noise only)"].update(get_results(CachedRepresentationModel(variant.mlm_only()), "b"))
 
     for model_name, results in results_per_model.items():
         save_results(model_name, results)
@@ -48,7 +48,7 @@ def main() -> None:
 def get_results(model: TcrMetric, chain: Literal["a", "b"]) -> Dict[str, DataFrame]:
     return {
         **get_one_shot_results(model, chain),
-        **get_few_shot_results(model, chain)
+        **get_few_shot_results(model, chain),
     }
 
 
@@ -87,7 +87,7 @@ def get_one_shot_results(model: TcrMetric, chain: Literal["a", "b"]) -> Dict[str
         results.extend(auc_summary)
     
     return {
-        f"ovr_1_shot": DataFrame.from_records(results)
+        f"ovr_{chain}_1_shot": DataFrame.from_records(results)
     }
 
 
@@ -140,7 +140,7 @@ def get_distance_based_k_shot_results(model: TcrMetric, chain: Literal["a","b"],
         results.extend(generate_summary(epitope, aucs, "auc"))
 
     return {
-        f"ovr_nn_{k}_shot": DataFrame.from_records(results),
+        f"ovr_nn_{chain}_{k}_shot": DataFrame.from_records(results),
     }
 
 

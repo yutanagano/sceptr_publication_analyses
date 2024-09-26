@@ -34,12 +34,12 @@ NUM_RANDOM_FOLDS = 100
 
 def main() -> None:
     results_per_model = dict()
-    results_per_model["TCRdist"] = get_results(tcr_metric.AlphaTcrdist(), "a")
-    results_per_model["TCRdist"].update(get_results(tcr_metric.BetaTcrdist(), "b"))
-    results_per_model["SCEPTR"] = get_results(CachedRepresentationModel(variant.default()), "a")
-    results_per_model["SCEPTR"].update(get_results(CachedRepresentationModel(variant.default()), "b"))
-    results_per_model["SCEPTR (dropout noise only)"] = get_results(CachedRepresentationModel(variant.mlm_only()), "a")
-    results_per_model["SCEPTR (dropout noise only)"].update(get_results(CachedRepresentationModel(variant.mlm_only()), "b"))
+    # results_per_model["TCRdist"] = get_results(tcr_metric.AlphaTcrdist(), "a")
+    # results_per_model["TCRdist"].update(get_results(tcr_metric.BetaTcrdist(), "b"))
+    # results_per_model["SCEPTR"] = get_results(CachedRepresentationModel(variant.default()), "a")
+    # results_per_model["SCEPTR"].update(get_results(CachedRepresentationModel(variant.default()), "b"))
+    results_per_model["SCEPTR (dropout noise only)"] = get_results(CachedRepresentationModel(variant.dropout_noise_only()), "a")
+    results_per_model["SCEPTR (dropout noise only)"].update(get_results(CachedRepresentationModel(variant.dropout_noise_only()), "b"))
 
     for model_name, results in results_per_model.items():
         save_results(model_name, results)

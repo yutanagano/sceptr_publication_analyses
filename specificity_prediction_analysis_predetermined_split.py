@@ -58,7 +58,10 @@ def main() -> None:
 def get_results(model: TcrMetric) -> Dict[str, DataFrame]:
     return {
         **get_seen_pmhc_results(model),
-        **get_seen_pmhc_results_filtered(model),
+        **get_seen_pmhc_results_filtered(model, 0.95),
+        **get_seen_pmhc_results_filtered(model, 0.90),
+        **get_seen_pmhc_results_filtered(model, 0.85),
+        **get_seen_pmhc_results_filtered(model, 0.80),
         **get_unseen_pmhc_one_shot_results(model),
         **get_unseen_pmhc_few_shot_results(model)
     }
@@ -91,11 +94,11 @@ def get_seen_pmhc_results(model: TcrMetric) -> Dict[str, DataFrame]:
     }
 
 
-def get_seen_pmhc_results_filtered(model: TcrMetric) -> Dict[str, DataFrame]:
+def get_seen_pmhc_results_filtered(model: TcrMetric, sequence_identity_threshold: float) -> Dict[str, DataFrame]:
     print(f"Commencing ovr (predetermined split, filtered) for {model.name}...")
 
     logging.info(f"Data size before filtering for similar sequences: {len(TEST_DATA_DISCRIMINATION)}")
-    test_data_filtered = filter_for_sequence_similarity(TEST_DATA_DISCRIMINATION, TRAIN_DATA)
+    test_data_filtered = filter_for_sequence_similarity(TEST_DATA_DISCRIMINATION, TRAIN_DATA, sequence_identity_threshold)
     logging.info(f"Data size after filtering for similar sequences: {len(test_data_filtered)}")
     logging.info(f"Filtered data breakdown:\n{test_data_filtered.groupby('Epitope').size()}")
 
@@ -118,8 +121,8 @@ def get_seen_pmhc_results_filtered(model: TcrMetric) -> Dict[str, DataFrame]:
         avg_dist_results.append({"epitope": epitope, "auc": avg_dist_auc})
 
     return {
-        f"ovr_predetermined_split_filtered_nn": DataFrame.from_records(nn_results),
-        f"ovr_predetermined_split_filtered_avg_dist": DataFrame.from_records(avg_dist_results),
+        f"ovr_predetermined_split_f{sequence_identity_threshold*100:.0f}_nn": DataFrame.from_records(nn_results),
+        f"ovr_predetermined_split_f{sequence_identity_threshold*100:.0f}_avg_dist": DataFrame.from_records(avg_dist_results),
     }
 
 
@@ -233,7 +236,7 @@ def save_results(model_name: str, results: Dict[str, DataFrame]) -> None:
         results_table.to_csv(model_dir/f"{benchmark_type}.csv", index=False)
 
 
-def filter_for_sequence_similarity(test_df: DataFrame, train_df: DataFrame) -> DataFrame:    
+def filter_for_sequence_similarity(test_df: DataFrame, train_df: DataFrame, sequence_identity_threshold: float) -> DataFrame:    
     # Get cdist
     cdr3_levenshtein = tcr_metric.Cdr3Levenshtein()
     cdist_matrix = cdr3_levenshtein.calc_cdist_matrix(test_df, train_df)
@@ -269,7 +272,7 @@ def filter_for_sequence_similarity(test_df: DataFrame, train_df: DataFrame) -> D
 
     # Calculate sequence identity
     seq_identity = 1 - (nn_dists/combined_cdr3_length)
-    legal_test_seq_mask = seq_identity < 0.80
+    legal_test_seq_mask = seq_identity < sequence_identity_threshold
 
     # Return filtered df
     return test_df[legal_test_seq_mask]

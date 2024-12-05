@@ -1,6 +1,8 @@
 # SCEPTR Publication Analyses
 
-This is a repository containing code that was used to conduct the model analyses and generate the plots seen in the SCEPTR publication [insert link here].
+[![DOI](https://zenodo.org/badge/768023440.svg)](https://doi.org/10.5281/zenodo.14285923)
+
+This is a repository containing code that was used to conduct the model analyses and generate the plots seen in our manuscript ["Contrastive learning of T cell receptor representations"](https://arxiv.org/abs/2406.06397).
 
 ## Potential files of interest
 |Relative path|Description|
